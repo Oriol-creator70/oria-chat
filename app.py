@@ -39,7 +39,7 @@ fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1
 # ==========================================
 
 # Clave / Token de la API asignado directamente
-API_KEY = "AQ.Ab8RN6KTcPdZzgXHJZt88vPX_56EjdJfpCydxTdOdwxQ6H6ung"
+API_KEY = "AQ.Ab8RN6KsZyo8RJcF_I8wGC-gEhDx0i7GbEH_b_7oEo2Hm_u54w"
 
 
 def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
