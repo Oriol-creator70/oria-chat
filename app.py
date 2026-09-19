@@ -42,44 +42,65 @@ fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1
 API_KEY = "AQ.Ab8RN6KTcPdZzgXHJZt88vPX_56EjdJfpCydxTdOdwxQ6H6ung"
 
 
-def obtener_respuesta_ia(prompt_usuario, historial_mensajes):
-  """Realiza una petición HTTP POST directa a la API de Gemini.
+def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
+    """
+    Realiza una petición HTTP POST directa a la API de Gemini.
+    Soporta 1 o 2 parámetros y procesa entradas en lista o texto.
+    """
+    if historial_mensajes is None:
+        historial_mensajes = []
+        
+    # Si prompt_usuario llega dentro de una lista (ej: [user_text])
+    if isinstance(prompt_usuario, list):
+        prompt_usuario = str(prompt_usuario[0]) if prompt_usuario else ""
 
-  Envía la clave AQ... en la cabecera Authorization Bearer.
-  """
-  url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    
+    headers = {
+        "Content-Type": "application/json"
+    }
 
-  headers = {"Content-Type": "application/json"}
-
-  # Enviar como Bearer token para claves corporativas (AQ...)
-  if API_KEY.startswith("AQ."):
-    headers["Authorization"] = f"Bearer {API_KEY}"
-    endpoint_url = url
-  else:
-    endpoint_url = f"{url}?key={API_KEY}"
-
-  # Construir el historial para la API
-  contents = []
-  for msg in historial_mensajes:
-    role = "user" if msg.get("role") == "user" else "model"
-    contents.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
-
-  system_instruction = f"Eres ORIA, una asistente virtual altamente inteligente, atenta, útil y muy eficaz. La fecha de hoy es: {fecha_hoy_str}."
-
-  payload = {
-      "contents": contents,
-      "systemInstruction": {"parts": [{"text": system_instruction}]},
-  }
-
-  try:
-    response = requests.post(endpoint_url, headers=headers, json=payload)
-    if response.status_code == 200:
-      data = response.json()
-      return data["candidates"][0]["content"]["parts"][0]["text"]
+    # Enviar como Bearer token para claves corporativas (AQ...)
+    if API_KEY.startswith("AQ."):
+        headers["Authorization"] = f"Bearer {API_KEY}"
+        endpoint_url = url
     else:
-      return f"⚠️ Error en la API ({response.status_code}): {response.text}"
-  except Exception as e:
-    return f"⚠️ Error de conexión: {str(e)}"
+        endpoint_url = f"{url}?key={API_KEY}"
+
+    # Construir el historial para la API
+    contents = []
+    for msg in historial_mensajes:
+        if isinstance(msg, dict):
+            role = "user" if msg.get("role") == "user" else "model"
+            contents.append({
+                "role": role,
+                "parts": [{"text": str(msg.get("content", ""))}]
+            })
+        
+    # Añadir el mensaje actual
+    contents.append({
+        "role": "user",
+        "parts": [{"text": str(prompt_usuario)}]
+    })
+
+    system_instruction = f"Eres ORIA, una asistente virtual altamente inteligente, atenta, útil y muy eficaz. La fecha de hoy es: {fecha_hoy_str}."
+
+    payload = {
+        "contents": contents,
+        "systemInstruction": {
+            "parts": [{"text": system_instruction}]
+        }
+    }
+
+    try:
+        response = requests.post(endpoint_url, headers=headers, json=payload)
+        if response.status_code == 200:
+            data = response.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        else:
+            return f"⚠️ Error en la API ({response.status_code}): {response.text}"
+    except Exception as e:
+        return f"⚠️ Error de conexión: {str(e)}"
 # 5. Estilos CSS Personalizados
 st.markdown("""
     <style>
