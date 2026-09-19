@@ -1,3 +1,4 @@
+import requests
 import streamlit as st
 import google.generativeai as genai
 from datetime import datetime
@@ -33,59 +34,52 @@ dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "doming
 meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
-# 4. Configuración de la API Key
-API_KEY = "AQ.Ab8RN6I40F2Q6gncufl8LWHn4gZNBXgf4FI4I88xImoLWmxmFg"
+# ==========================================
+# 4. CONFIGURACIÓN Y LLAMADA A LA API (HTTPS DIRECTO)
+# ==========================================
 
-system_instruction = f"""Eres ORIA, una asistente virtual altamente inteligente, atenta, útil y muy eficaz.
-DATOS DE CONTEXTO:
-- La fecha de HOY es estrictamente: {fecha_hoy_str} ({ahora.strftime('%d/%m/%Y')}).
-- Si te preguntan qué día es hoy o por la fecha actual, respondes exactamente la fecha de hoy: {fecha_hoy_str}.
+# Clave / Token de la API asignado directamente
+API_KEY = "AQ.Ab8RN6KTcPdZzgXHJZt88vPX_56EjdJfpCydxTdOdwxQ6H6ung"
 
-INSTRUCCIONES DE RESPUESTA:
-- Responde siempre de forma clara, detallada, profesional y muy bien estructurada."""
 
-genai.configure(api_key=API_KEY)
+def obtener_respuesta_ia(prompt_usuario, historial_mensajes):
+  """Realiza una petición HTTP POST directa a la API de Gemini.
 
-# Función de llamada a la IA con detección automática de modelos válidos
-def obtener_respuesta_ia(payload):
-    modelos_a_probar = []
-    
-    try:
-        modelos_disponibles = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        for m in modelos_disponibles:
-            if "flash" in m:
-                modelos_a_probar.append(m)
-        for m in modelos_disponibles:
-            if m not in modelos_a_probar:
-                modelos_a_probar.append(m)
-    except Exception:
-        pass
+  Envía la clave AQ... en la cabecera Authorization Bearer.
+  """
+  url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
-    candidatos_estandar = [
-        "gemini-1.5-flash",
-        "gemini-2.0-flash",
-        "models/gemini-1.5-flash",
-        "models/gemini-2.0-flash",
-        "gemini-1.5-pro",
-        "models/gemini-1.5-pro"
-    ]
-    for cand in candidatos_estandar:
-        if cand not in modelos_a_probar:
-            modelos_a_probar.append(cand)
+  headers = {"Content-Type": "application/json"}
 
-    ultimo_error = ""
-    for model_name in modelos_a_probar:
-        try:
-            model = genai.GenerativeModel(model_name, system_instruction=system_instruction)
-            response = model.generate_content(payload)
-            if response and response.text:
-                return response.text
-        except Exception as e:
-            ultimo_error = str(e)
-            continue
+  # Enviar como Bearer token para claves corporativas (AQ...)
+  if API_KEY.startswith("AQ."):
+    headers["Authorization"] = f"Bearer {API_KEY}"
+    endpoint_url = url
+  else:
+    endpoint_url = f"{url}?key={API_KEY}"
 
-    return f"⚠️ Error al conectar con la IA: {ultimo_error}"
+  # Construir el historial para la API
+  contents = []
+  for msg in historial_mensajes:
+    role = "user" if msg.get("role") == "user" else "model"
+    contents.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
 
+  system_instruction = f"Eres ORIA, una asistente virtual altamente inteligente, atenta, útil y muy eficaz. La fecha de hoy es: {fecha_hoy_str}."
+
+  payload = {
+      "contents": contents,
+      "systemInstruction": {"parts": [{"text": system_instruction}]},
+  }
+
+  try:
+    response = requests.post(endpoint_url, headers=headers, json=payload)
+    if response.status_code == 200:
+      data = response.json()
+      return data["candidates"][0]["content"]["parts"][0]["text"]
+    else:
+      return f"⚠️ Error en la API ({response.status_code}): {response.text}"
+  except Exception as e:
+    return f"⚠️ Error de conexión: {str(e)}"
 # 5. Estilos CSS Personalizados
 st.markdown("""
     <style>
