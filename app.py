@@ -1,10 +1,11 @@
-import requests
-import streamlit as st
-import google.generativeai as genai
-from datetime import datetime
-import uuid
 import json
 import os
+import uuid
+from datetime import datetime
+import requests
+import streamlit as st
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 
 # 1. Configuración de la página
 st.set_page_config(page_title="ORIA", page_icon="✨", layout="wide")
@@ -12,48 +13,46 @@ st.set_page_config(page_title="ORIA", page_icon="✨", layout="wide")
 # 2. Persistencia local en archivo JSON
 DB_FILE = "conversaciones.json"
 
+
 def cargar_chats():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+  if os.path.exists(DB_FILE):
+    try:
+      with open(DB_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+    except Exception:
+      return {}
+  return {}
+
 
 def guardar_chats(chats):
-    try:
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(chats, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"Error al guardar en disco: {e}")
+  try:
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+      json.dump(chats, f, ensure_ascii=False, indent=2)
+  except Exception as e:
+    st.error(f"Error al guardar en disco: {e}")
+
 
 # 3. Obtención de fecha real del sistema
 ahora = datetime.now()
 dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+meses = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+]
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
-# ==========================================
-# 4. CONFIGURACIÓN Y LLAMADA A LA API (HTTPS DIRECTO)
-# ==========================================
 
-# Clave / Token de la API asignado directamente
-API_KEY = "AQ.Ab8RN6KsZyo8RJcF_I8wGC-gEhDx0i7GbEH_b_7oEo2Hm_u54w"
-
-
-import os
-from datetime import datetime
-import requests
-import streamlit as st
-from google.auth.transport.requests import Request
-from google.oauth2 import service_account
-
-st.set_page_config(page_title="ORIA", page_icon="🤖", layout="wide")
-
-fecha_hoy_str = datetime.now().strftime("%Y-%m-%d")
-
-
+# 4. Funciones de Autenticación Vertex AI
 def obtener_token_oauth():
   """Genera el token de acceso OAuth2 desde los Secrets de Streamlit."""
   info = dict(st.secrets["gcp_service_account"])
@@ -71,9 +70,6 @@ def obtener_token_oauth():
 def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
   if historial_mensajes is None:
     historial_mensajes = []
-
-  if isinstance(prompt_usuario, list):
-    prompt_usuario = str(prompt_usuario[0]) if prompt_usuario else ""
 
   try:
     token = obtener_token_oauth()
@@ -95,16 +91,14 @@ def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
           {"role": role, "parts": [{"text": str(msg.get("content", ""))}]}
       )
 
-  contents.append({"role": "user", "parts": [{"text": str(prompt_usuario)}]})
-
   payload = {
       "contents": contents,
       "systemInstruction": {
           "parts": [
               {
                   "text": (
-                      "Eres ORIA, una asistente virtual altamente inteligente."
-                      f" La fecha de hoy es: {fecha_hoy_str}."
+                      "Eres ORIA, una asistente virtual altamente inteligente,"
+                      f" atenta y muy eficaz. La fecha de hoy es: {fecha_hoy_str}."
                   )
               }
           ]
@@ -122,32 +116,10 @@ def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
     return f"⚠️ Error de conexión: {str(e)}"
 
 
-# Interfaz gráfica
-st.title("ORIA")
-st.subheader("¿En qué te puedo ayudar hoy?")
-
-if "messages" not in st.session_state:
-  st.session_state.messages = []
-
-for msg in st.session_state.messages:
-  with st.chat_message(msg["role"]):
-    st.markdown(msg["content"])
-
-if prompt := st.chat_input("Preguntar a ORIA..."):
-  st.session_state.messages.append({"role": "user", "content": prompt})
-  with st.chat_message("user"):
-    st.markdown(prompt)
-
-  with st.chat_message("assistant"):
-    with st.spinner("Pensando..."):
-      respuesta = obtener_respuesta_ia(prompt, st.session_state.messages)
-      st.markdown(respuesta)
-
-  st.session_state.messages.append({"role": "assistant", "content": respuesta})
 # 5. Estilos CSS Personalizados
-st.markdown("""
+st.markdown(
+    """
     <style>
-    /* Ocultar avatares por defecto */
     [data-testid="stChatMessageAvatarUser"], [data-testid="stChatMessageAvatarAssistant"] {
         display: none !important;
     }
@@ -156,8 +128,6 @@ st.markdown("""
         border: none !important;
         padding: 4px 0px !important;
     }
-    
-    /* Burbuja de Usuario (Derecha) */
     .user-bubble-container {
         display: flex;
         justify-content: flex-end;
@@ -175,109 +145,140 @@ st.markdown("""
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         font-size: 1rem;
     }
-    
     .stSidebar .stButton > button {
         border-radius: 8px !important;
     }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # 6. Cargar datos en sesión
 if "chats" not in st.session_state:
-    st.session_state.chats = cargar_chats()
+  st.session_state.chats = cargar_chats()
 
 if "current_chat_id" not in st.session_state:
-    st.session_state.current_chat_id = None
+  st.session_state.current_chat_id = None
 
 # 7. Menú Lateral (Barra de Conversaciones)
 with st.sidebar:
-    st.title("Conversaciones")
-    if st.button("➕ Nueva conversación", use_container_width=True, type="primary"):
+  st.title("Conversaciones")
+  if st.button("➕ Nueva conversación", use_container_width=True, type="primary"):
+    st.session_state.current_chat_id = None
+    st.rerun()
+
+  st.markdown("---")
+
+  chats_a_borrar = []
+  for cid, chat_info in reversed(list(st.session_state.chats.items())):
+    col_btn, col_del = st.columns([0.82, 0.18])
+    btn_type = (
+        "secondary" if cid != st.session_state.current_chat_id else "primary"
+    )
+
+    with col_btn:
+      if st.button(
+          f"💬 {chat_info['title']}",
+          key=f"chat_{cid}",
+          use_container_width=True,
+          type=btn_type,
+      ):
+        st.session_state.current_chat_id = cid
+        st.rerun()
+    with col_del:
+      if st.button("🗑️", key=f"del_{cid}"):
+        chats_a_borrar.append(cid)
+
+  if chats_a_borrar:
+    for cid in chats_a_borrar:
+      del st.session_state.chats[cid]
+      if st.session_state.current_chat_id == cid:
         st.session_state.current_chat_id = None
-        st.rerun()
-
-    st.markdown("---")
-
-    chats_a_borrar = []
-    for cid, chat_info in reversed(list(st.session_state.chats.items())):
-        col_btn, col_del = st.columns([0.82, 0.18])
-        btn_type = "secondary" if cid != st.session_state.current_chat_id else "primary"
-        
-        with col_btn:
-            if st.button(f"💬 {chat_info['title']}", key=f"chat_{cid}", use_container_width=True, type=btn_type):
-                st.session_state.current_chat_id = cid
-                st.rerun()
-        with col_del:
-            if st.button("🗑️", key=f"del_{cid}"):
-                chats_a_borrar.append(cid)
-
-    if chats_a_borrar:
-        for cid in chats_a_borrar:
-            del st.session_state.chats[cid]
-            if st.session_state.current_chat_id == cid:
-                st.session_state.current_chat_id = None
-        guardar_chats(st.session_state.chats)
-        st.rerun()
+    guardar_chats(st.session_state.chats)
+    st.rerun()
 
 # 8. Obtener mensajes del chat activo
-if st.session_state.current_chat_id and st.session_state.current_chat_id in st.session_state.chats:
-    mensajes_actuales = st.session_state.chats[st.session_state.current_chat_id]["messages"]
+if (
+    st.session_state.current_chat_id
+    and st.session_state.current_chat_id in st.session_state.chats
+):
+  mensajes_actuales = st.session_state.chats[st.session_state.current_chat_id][
+      "messages"
+  ]
 else:
-    mensajes_actuales = []
+  mensajes_actuales = []
 
 # 9. Pantalla inicial centrada si no hay mensajes
 if len(mensajes_actuales) == 0:
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown("<h1 style='text-align: center; font-size: 3.5rem; font-weight: bold;'>ORIA</h1>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center; color: #666;'>¿En qué te puedo ayudar hoy?</h3>", unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
+  st.markdown("<br><br><br>", unsafe_allow_html=True)
+  col1, col2, col3 = st.columns([1, 2, 1])
+  with col2:
+    st.markdown(
+        "<h1 style='text-align: center; font-size: 3.5rem; font-weight:"
+        " bold;'>ORIA</h1>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<h3 style='text-align: center; color: #666;'>¿En qué te puedo ayudar"
+        " hoy?</h3>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
 
 # 10. Renderizado de Mensajes Anteriores
 for message in mensajes_actuales:
-    if message["role"] == "user":
-        content_html = f'<div class="user-bubble-container"><div class="user-bubble">{message["content"]}</div></div>'
-        st.markdown(content_html, unsafe_allow_html=True)
-    else:
-        with st.chat_message("assistant"):
-            st.markdown(message["content"])
-
-# 11. Entrada de chat principal
-prompt = st.chat_input("Preguntar a ORIA...")
-
-# 12. Procesar consulta al enviar
-if prompt:
-    user_text = prompt
-
-    # Crear nuevo chat si no existe uno activo
-    if not st.session_state.current_chat_id or st.session_state.current_chat_id not in st.session_state.chats:
-        nuevo_id = str(uuid.uuid4())
-        titulo = prompt.strip()
-        if len(titulo) > 26:
-            titulo = titulo[:26] + "..."
-        titulo = titulo.capitalize()
-
-        st.session_state.chats[nuevo_id] = {
-            "title": titulo,
-            "messages": []
-        }
-        st.session_state.current_chat_id = nuevo_id
-
-    # Guardar y mostrar inmediatamente el mensaje del usuario
-    st.session_state.chats[st.session_state.current_chat_id]["messages"].append({"role": "user", "content": user_text})
-    guardar_chats(st.session_state.chats)
-
-    content_html = f'<div class="user-bubble-container"><div class="user-bubble">{user_text}</div></div>'
+  if message["role"] == "user":
+    content_html = (
+        '<div class="user-bubble-container"><div'
+        f' class="user-bubble">{message["content"]}</div></div>'
+    )
     st.markdown(content_html, unsafe_allow_html=True)
-
-    # Procesar respuesta con indicador visual
+  else:
     with st.chat_message("assistant"):
-        with st.spinner("ORIA está pensando..."):
-            respuesta_texto = obtener_respuesta_ia([user_text])
-            st.markdown(respuesta_texto)
+      st.markdown(message["content"])
 
-    # Guardar respuesta y actualizar
-    st.session_state.chats[st.session_state.current_chat_id]["messages"].append({"role": "assistant", "content": respuesta_texto})
-    guardar_chats(st.session_state.chats)
-    st.rerun()
+# 11. Entrada de chat principal y procesamiento
+if prompt := st.chat_input("Preguntar a ORIA..."):
+  user_text = prompt
+
+  # Crear nuevo chat si no existe uno activo
+  if (
+      not st.session_state.current_chat_id
+      or st.session_state.current_chat_id not in st.session_state.chats
+  ):
+    nuevo_id = str(uuid.uuid4())
+    titulo = prompt.strip()
+    if len(titulo) > 26:
+      titulo = titulo[:26] + "..."
+    titulo = titulo.capitalize()
+
+    st.session_state.chats[nuevo_id] = {"title": titulo, "messages": []}
+    st.session_state.current_chat_id = nuevo_id
+
+  # Guardar y mostrar mensaje del usuario
+  st.session_state.chats[st.session_state.current_chat_id]["messages"].append(
+      {"role": "user", "content": user_text}
+  )
+  guardar_chats(st.session_state.chats)
+
+  content_html = (
+      '<div class="user-bubble-container"><div'
+      f' class="user-bubble">{user_text}</div></div>'
+  )
+  st.markdown(content_html, unsafe_allow_html=True)
+
+  # Generar respuesta
+  with st.chat_message("assistant"):
+    with st.spinner("ORIA está pensando..."):
+      respuesta_texto = obtener_respuesta_ia(
+          user_text,
+          st.session_state.chats[st.session_state.current_chat_id]["messages"],
+      )
+      st.markdown(respuesta_texto)
+
+  # Guardar respuesta de la IA
+  st.session_state.chats[st.session_state.current_chat_id]["messages"].append(
+      {"role": "assistant", "content": respuesta_texto}
+  )
+  guardar_chats(st.session_state.chats)
+  st.rerun()
