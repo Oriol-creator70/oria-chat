@@ -44,10 +44,10 @@ API_KEY = "AQ.Ab8RN6KsZyo8RJcF_I8wGC-gEhDx0i7GbEH_b_7oEo2Hm_u54w"
 
 import os
 from datetime import datetime
-from google.auth.transport.requests import Request
-from google.oauth2 import service_account
 import requests
 import streamlit as st
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 
 st.set_page_config(page_title="ORIA", page_icon="🤖", layout="wide")
 
@@ -122,7 +122,7 @@ def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
     return f"⚠️ Error de conexión: {str(e)}"
 
 
-# Interfaz gráfica de la app
+# Interfaz gráfica
 st.title("ORIA")
 st.subheader("¿En qué te puedo ayudar hoy?")
 
