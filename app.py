@@ -42,14 +42,20 @@ fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1
 API_KEY = "AQ.Ab8RN6KsZyo8RJcF_I8wGC-gEhDx0i7GbEH_b_7oEo2Hm_u54w"
 
 
-import requests
-import streamlit as st
+import os
+from datetime import datetime
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
+import requests
+import streamlit as st
+
+st.set_page_config(page_title="ORIA", page_icon="🤖", layout="wide")
+
+fecha_hoy_str = datetime.now().strftime("%Y-%m-%d")
 
 
 def obtener_token_oauth():
-  """Genera un token OAuth2 usando las credenciales de la cuenta de servicio."""
+  """Genera el token de acceso OAuth2 desde los Secrets de Streamlit."""
   info = dict(st.secrets["gcp_service_account"])
   if "\\n" in info["private_key"]:
     info["private_key"] = info["private_key"].replace("\\n", "\n")
@@ -98,6 +104,7 @@ def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
               {
                   "text": (
                       "Eres ORIA, una asistente virtual altamente inteligente."
+                      f" La fecha de hoy es: {fecha_hoy_str}."
                   )
               }
           ]
@@ -113,6 +120,30 @@ def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
       return f"⚠️ Error en la API ({response.status_code}): {response.text}"
   except Exception as e:
     return f"⚠️ Error de conexión: {str(e)}"
+
+
+# Interfaz gráfica de la app
+st.title("ORIA")
+st.subheader("¿En qué te puedo ayudar hoy?")
+
+if "messages" not in st.session_state:
+  st.session_state.messages = []
+
+for msg in st.session_state.messages:
+  with st.chat_message(msg["role"]):
+    st.markdown(msg["content"])
+
+if prompt := st.chat_input("Preguntar a ORIA..."):
+  st.session_state.messages.append({"role": "user", "content": prompt})
+  with st.chat_message("user"):
+    st.markdown(prompt)
+
+  with st.chat_message("assistant"):
+    with st.spinner("Pensando..."):
+      respuesta = obtener_respuesta_ia(prompt, st.session_state.messages)
+      st.markdown(respuesta)
+
+  st.session_state.messages.append({"role": "assistant", "content": respuesta})
 # 5. Estilos CSS Personalizados
 st.markdown("""
     <style>
