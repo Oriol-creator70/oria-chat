@@ -50,19 +50,39 @@ meses = [
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
 
-# 4. Conexión ultra rápida con Groq
+# 4. Conexión con la API de Groq
 def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
+  # Verificar si existe GROQ_API_KEY en st.secrets
   try:
-    api_key = st.secrets["GROQ_API_KEY"]
-  except Exception:
+    if "GROQ_API_KEY" not in st.secrets:
+      yield (
+          "⚠️ **No se ha encontrado `GROQ_API_KEY` en los Secrets de Streamlit"
+          " Cloud.**\n\nVe a **Manage app -> Settings -> Secrets** en Streamlit"
+          " Cloud y añade:\n```toml\nGROQ_API_KEY = 'gsk_tu_clave_aqui'\n```"
+      )
+      return
+    raw_key = str(st.secrets["GROQ_API_KEY"])
+  except Exception as e:
     yield (
-        "⚠️ Falta configurar GROQ_API_KEY en los Secrets de Streamlit."
-        " ¡Consulta las instrucciones!"
+        "⚠️ **Error al acceder a Streamlit Secrets:**"
+        f" {str(e)}\n\nConfigura la variable `GROQ_API_KEY` en Settings ->"
+        " Secrets."
+    )
+    return
+
+  # Limpiar comillas o espacios accidentales
+  api_key = raw_key.strip().strip('"').strip("'").strip()
+
+  if not api_key or not api_key.startswith("gsk_"):
+    yield (
+        "⚠️ **La clave guardada en Secrets no es válida.**\n\nAsegúrate de que la"
+        " API Key empieza por `gsk_` y no contiene espacios o caracteres"
+        " extra."
     )
     return
 
   headers = {
-      "Authorization": f"Bearer {api_key.strip()}",
+      "Authorization": f"Bearer {api_key}",
       "Content-Type": "application/json",
   }
 
@@ -83,54 +103,52 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
         role = "user" if msg["role"] == "user" else "assistant"
         messages.append({"role": role, "content": str(msg["content"])})
 
-  modelos = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+  payload = {
+      "model": "llama-3.3-70b-versatile",
+      "messages": messages,
+      "stream": True,
+      "temperature": 0.7,
+  }
 
-  for model_id in modelos:
-    payload = {
-        "model": model_id,
-        "messages": messages,
-        "stream": True,
-        "temperature": 0.7,
-    }
+  try:
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        stream=True,
+        timeout=20,
+    )
 
-    try:
-      response = requests.post(
-          "https://api.groq.com/openai/v1/chat/completions",
-          headers=headers,
-          json=payload,
-          stream=True,
-          timeout=15,
-      )
+    if response.status_code == 200:
+      for line in response.iter_lines():
+        if line:
+          line_str = line.decode("utf-8")
+          if line_str.startswith("data: "):
+            data_json = line_str[6:]
+            if data_json.strip() == "[DONE]":
+              break
+            try:
+              chunk_obj = json.loads(data_json)
+              delta = chunk_obj["choices"][0]["delta"]
+              if "content" in delta:
+                yield delta["content"]
+            except Exception:
+              pass
+      return
+    else:
+      # Mostrar el mensaje exacto que devuelve la API de Groq
+      error_msg = response.text
+      try:
+        err_json = response.json()
+        if "error" in err_json and "message" in err_json["error"]:
+          error_msg = err_json["error"]["message"]
+      except Exception:
+        pass
 
-      if response.status_code == 200:
-        for line in response.iter_lines():
-          if line:
-            line_str = line.decode("utf-8")
-            if line_str.startswith("data: "):
-              data_json = line_str[6:]
-              if data_json.strip() == "[DONE]":
-                break
-              try:
-                chunk_obj = json.loads(data_json)
-                delta = chunk_obj["choices"][0]["delta"]
-                if "content" in delta:
-                  yield delta["content"]
-              except Exception:
-                pass
-        return
-      elif response.status_code in (401, 403):
-        yield (
-            "⚠️ **API Key revocada por seguridad.** Genera una NUEVA API Key en"
-            " console.groq.com y ponla únicamente en los Secrets de Streamlit."
-        )
-        return
-    except Exception:
-      continue
+      yield f"⚠️ **Error de Groq (Código HTTP {response.status_code}):** {error_msg}"
 
-  yield (
-      "⚠️ No se pudo conectar con Groq. Por favor verifica que tu API Key en"
-      " Streamlit Secrets sea correcta y esté activa."
-  )
+  except Exception as e:
+    yield f"⚠️ **Error de conexión:** {str(e)}"
 
 
 # 5. Estilos CSS Personalizados
