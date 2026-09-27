@@ -2,11 +2,14 @@ import json
 import os
 import uuid
 import html
+import base64
 from datetime import datetime
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import requests
 import streamlit as st
+from pypdf import PdfReader
 
 
 # ============================================================
@@ -21,10 +24,17 @@ st.set_page_config(
 
 
 # ============================================================
-# 2. BASE DE DATOS LOCAL DE CONVERSACIONES
+# 2. BASE DE DATOS LOCAL DE CONVERSACIONES Y MEMORIA
 # ============================================================
 
 DB_FILE = "conversaciones.json"
+MEMORIA_FILE = "memoria.txt"
+CARPETA_IMAGENES = "imagenes_generadas"
+
+# Cuántos mensajes recientes mandamos como contexto a Groq.
+# Evita que las conversaciones muy largas se coman el contexto
+# (y la cuota gratuita) del modelo.
+MAX_MENSAJES_HISTORIAL = 20
 
 
 def cargar_chats():
@@ -56,6 +66,26 @@ def guardar_chats(chats):
 
     except Exception as e:
         st.error(f"Error al guardar las conversaciones: {e}")
+
+
+def cargar_memoria():
+    """Carga los datos que ORIA debe recordar sobre el usuario."""
+    if os.path.exists(MEMORIA_FILE):
+        try:
+            with open(MEMORIA_FILE, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return ""
+    return ""
+
+
+def guardar_memoria(texto):
+    """Guarda los datos que ORIA debe recordar."""
+    try:
+        with open(MEMORIA_FILE, "w", encoding="utf-8") as f:
+            f.write(texto)
+    except Exception as e:
+        st.error(f"Error al guardar la memoria: {e}")
 
 
 # ============================================================
@@ -102,8 +132,12 @@ fecha_hoy_str = (
 # 4. CONFIGURACIÓN DE GROQ
 # ============================================================
 
-# Modelo actual de Groq.
+# Modelo de texto (rápido, para la conversación normal).
 MODELO_GROQ = "openai/gpt-oss-120b"
+
+# Modelo con visión (el único multimodal del catálogo self-serve
+# de Groq). Se usa solo cuando el usuario adjunta una imagen.
+MODELO_GROQ_VISION = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 URL_GROQ = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -132,16 +166,95 @@ def obtener_api_key():
 
 
 # ============================================================
-# 5. FUNCIÓN PRINCIPAL DE LA IA
+# 5. UTILIDADES PARA IMÁGENES Y PDF
+# ============================================================
+
+def imagen_a_data_uri(archivo_subido):
+    """Convierte un archivo de imagen subido en un data URI base64,
+    formato que necesita la API de Groq para 'ver' la imagen."""
+
+    bytes_imagen = archivo_subido.getvalue()
+    b64 = base64.b64encode(bytes_imagen).decode("utf-8")
+    tipo_mime = archivo_subido.type or "image/png"
+
+    return f"data:{tipo_mime};base64,{b64}"
+
+
+def extraer_texto_pdf(archivo_subido):
+    """Extrae el texto de un PDF subido. Devuelve (texto, error)."""
+
+    try:
+        lector = PdfReader(archivo_subido)
+
+        texto = ""
+        for pagina in lector.pages:
+            texto += (pagina.extract_text() or "") + "\n"
+
+        texto = texto.strip()
+
+        if not texto:
+            return None, (
+                "No se ha podido extraer texto de este PDF "
+                "(puede que sea un documento escaneado, es decir, "
+                "imágenes sin texto real)."
+            )
+
+        # Recortamos para no disparar el consumo de tokens.
+        if len(texto) > 12000:
+            texto = texto[:12000] + "\n\n[...documento truncado por longitud...]"
+
+        return texto, None
+
+    except Exception as e:
+        return None, str(e)
+
+
+def generar_imagen_ia(prompt_imagen):
+    """Genera una imagen a partir de un texto usando Pollinations.ai
+    (servicio gratuito, no requiere API key). Devuelve (bytes, error)."""
+
+    try:
+        prompt_codificado = quote(prompt_imagen)
+        semilla = uuid.uuid4().int % 1_000_000
+
+        url = (
+            f"https://image.pollinations.ai/prompt/{prompt_codificado}"
+            f"?width=1024&height=1024&nologo=true&seed={semilla}"
+        )
+
+        respuesta = requests.get(url, timeout=90)
+
+        if (
+            respuesta.status_code == 200
+            and respuesta.headers.get("content-type", "").startswith("image")
+        ):
+            return respuesta.content, None
+
+        return None, f"El generador de imágenes devolvió el error {respuesta.status_code}."
+
+    except requests.exceptions.Timeout:
+        return None, "El generador de imágenes ha tardado demasiado. Inténtalo de nuevo."
+
+    except Exception as e:
+        return None, str(e)
+
+
+# ============================================================
+# 6. FUNCIÓN PRINCIPAL DE LA IA
 # ============================================================
 
 def obtener_respuesta_ia_stream(
     prompt_usuario,
     historial_mensajes=None,
+    imagen_data_uri=None,
+    memoria_texto="",
 ):
     """
     Envía la conversación a Groq y devuelve la respuesta
     progresivamente mediante streaming.
+
+    Si se pasa `imagen_data_uri`, la consulta se manda al modelo
+    con visión (MODELO_GROQ_VISION) junto con la imagen adjunta.
     """
 
     # --------------------------------------------------------
@@ -178,72 +291,127 @@ def obtener_respuesta_ia_stream(
     }
 
     # --------------------------------------------------------
-    # Mensajes
+    # System prompt (incluye memoria si existe)
     # --------------------------------------------------------
+
+    instrucciones_sistema = (
+        "Eres ORIA, una asistente virtual inteligente, "
+        "rápida, natural, amable y precisa. "
+        "Puedes ayudar con tecnología, programación, "
+        "deportes, fútbol, estudios, informática, "
+        "cultura, entretenimiento y muchos otros temas. "
+        "También puedes analizar imágenes y documentos PDF "
+        "que el usuario te adjunte, y generar imágenes cuando te "
+        "lo pidan. "
+        f"La fecha actual es {fecha_hoy_str}. "
+        "Responde siempre en español, salvo que el usuario "
+        "pida expresamente otro idioma. "
+        "Explica las cosas de forma clara y útil."
+    )
+
+    if memoria_texto and memoria_texto.strip():
+        instrucciones_sistema += (
+            "\n\nDatos que debes recordar sobre este usuario "
+            "(úsalos de forma natural cuando sea relevante, sin "
+            "recitarlos innecesariamente):\n"
+            f"{memoria_texto.strip()}"
+        )
 
     messages = [
         {
             "role": "system",
-            "content": (
-                "Eres ORIA, una asistente virtual inteligente, "
-                "rápida, natural, amable y precisa. "
-                "Puedes ayudar con tecnología, programación, "
-                "deportes, fútbol, estudios, informática, "
-                "cultura, entretenimiento y muchos otros temas. "
-                f"La fecha actual es {fecha_hoy_str}. "
-                "Responde siempre en español, salvo que el usuario "
-                "pida expresamente otro idioma. "
-                "Explica las cosas de forma clara y útil."
-            ),
+            "content": instrucciones_sistema,
         }
     ]
 
     # --------------------------------------------------------
-    # Añadir historial
+    # Modo visión: un único turno con la imagen adjunta
     # --------------------------------------------------------
 
-    if historial_mensajes:
-        for msg in historial_mensajes:
+    if imagen_data_uri:
 
-            if not isinstance(msg, dict):
-                continue
+        modelo_usar = MODELO_GROQ_VISION
 
-            if "role" not in msg or "content" not in msg:
-                continue
-
-            # Solo permitimos user / assistant.
-            if msg["role"] == "user":
-                role = "user"
-
-            elif msg["role"] == "assistant":
-                role = "assistant"
-
-            else:
-                continue
-
-            messages.append(
-                {
-                    "role": role,
-                    "content": str(msg["content"]),
-                }
-            )
-
-    # Si por alguna razón no tenemos historial,
-    # añadimos el mensaje actual.
-    if not historial_mensajes:
         messages.append(
             {
                 "role": "user",
-                "content": prompt_usuario,
+                "content": [
+                    {"type": "text", "text": prompt_usuario},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": imagen_data_uri},
+                    },
+                ],
             }
         )
+
+    # --------------------------------------------------------
+    # Modo texto normal: con historial (recortado)
+    # --------------------------------------------------------
+
+    else:
+
+        modelo_usar = MODELO_GROQ
+
+        if historial_mensajes:
+
+            recientes = historial_mensajes[-MAX_MENSAJES_HISTORIAL:]
+
+            for msg in recientes:
+
+                if not isinstance(msg, dict):
+                    continue
+
+                if "role" not in msg or "content" not in msg:
+                    continue
+
+                # Los mensajes de tipo "imagen" (generadas por ORIA)
+                # no se pueden mandar como texto; los resumimos.
+                if msg.get("type") == "image":
+                    if msg["role"] == "assistant":
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "content": (
+                                    "[Generé una imagen a partir de: "
+                                    f"{msg.get('prompt', '')}]"
+                                ),
+                            }
+                        )
+                    continue
+
+                if msg["role"] == "user":
+                    role = "user"
+
+                elif msg["role"] == "assistant":
+                    role = "assistant"
+
+                else:
+                    continue
+
+                messages.append(
+                    {
+                        "role": role,
+                        "content": str(msg["content"]),
+                    }
+                )
+
+        # Si por alguna razón no tenemos historial,
+        # añadimos el mensaje actual.
+        if not historial_mensajes:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": prompt_usuario,
+                }
+            )
 
     # --------------------------------------------------------
     # Payload
     # --------------------------------------------------------
 
     payload = {
-        "model": MODELO_GROQ,
+        "model": modelo_usar,
         "messages": messages,
         "stream": True,
         "temperature": 0.7,
@@ -366,7 +534,7 @@ def obtener_respuesta_ia_stream(
             yield (
                 "⚠️ **Error 404 de Groq.**\n\n"
                 f"{error_message}\n\n"
-                f"Modelo utilizado: `{MODELO_GROQ}`"
+                f"Modelo utilizado: `{modelo_usar}`"
             )
 
             return
@@ -439,7 +607,7 @@ def obtener_respuesta_ia_stream(
 
 
 # ============================================================
-# 6. CSS
+# 7. CSS
 # ============================================================
 
 css_code = """
@@ -495,7 +663,7 @@ st.markdown(
 
 
 # ============================================================
-# 7. SESSION STATE
+# 8. SESSION STATE
 # ============================================================
 
 if "chats" not in st.session_state:
@@ -504,9 +672,12 @@ if "chats" not in st.session_state:
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 
+if "memoria" not in st.session_state:
+    st.session_state.memoria = cargar_memoria()
+
 
 # ============================================================
-# 8. BARRA LATERAL
+# 9. BARRA LATERAL
 # ============================================================
 
 with st.sidebar:
@@ -609,9 +780,35 @@ with st.sidebar:
 
         st.rerun()
 
+    # --------------------------------------------
+    # MEMORIA DE ORIA
+    # --------------------------------------------
+
+    st.markdown("---")
+
+    with st.expander("🧠 Memoria de ORIA"):
+
+        st.caption(
+            "Escribe aquí datos que quieras que ORIA recuerde "
+            "siempre (tu nombre, tus preferencias, tu contexto...). "
+            "Se incluirán en todas las conversaciones."
+        )
+
+        nueva_memoria = st.text_area(
+            "Datos a recordar",
+            value=st.session_state.memoria,
+            height=150,
+            label_visibility="collapsed",
+        )
+
+        if st.button("Guardar memoria", use_container_width=True):
+            guardar_memoria(nueva_memoria)
+            st.session_state.memoria = nueva_memoria
+            st.success("Memoria guardada.")
+
 
 # ============================================================
-# 9. OBTENER CHAT ACTUAL
+# 10. OBTENER CHAT ACTUAL
 # ============================================================
 
 if (
@@ -635,7 +832,7 @@ else:
 
 
 # ============================================================
-# 10. PANTALLA INICIAL
+# 11. PANTALLA INICIAL
 # ============================================================
 
 if len(mensajes_actuales) == 0:
@@ -683,15 +880,14 @@ if len(mensajes_actuales) == 0:
 
 
 # ============================================================
-# 11. MOSTRAR MENSAJES ANTERIORES
+# 12. MOSTRAR MENSAJES ANTERIORES
 # ============================================================
 
 for message in mensajes_actuales:
 
     role = message.get("role")
-    content = str(
-        message.get("content", "")
-    )
+    tipo = message.get("type", "text")
+    content = message.get("content", "")
 
     # --------------------------------------------
     # MENSAJE DEL USUARIO
@@ -702,7 +898,7 @@ for message in mensajes_actuales:
         # Escapamos HTML para evitar que el contenido
         # introduzca etiquetas HTML directamente.
         contenido_seguro = html.escape(
-            content
+            str(content)
         ).replace("\n", "<br>")
 
         content_html = (
@@ -719,32 +915,62 @@ for message in mensajes_actuales:
         )
 
     # --------------------------------------------
-    # MENSAJE DE LA IA
+    # MENSAJE DE LA IA (TEXTO)
     # --------------------------------------------
 
-    elif role == "assistant":
+    elif role == "assistant" and tipo == "text":
 
         with st.chat_message("assistant"):
 
             st.markdown(
-                content
+                str(content)
             )
 
+    # --------------------------------------------
+    # MENSAJE DE LA IA (IMAGEN GENERADA)
+    # --------------------------------------------
+
+    elif role == "assistant" and tipo == "image":
+
+        with st.chat_message("assistant"):
+
+            if os.path.exists(content):
+                st.image(
+                    content,
+                    caption=message.get("prompt", ""),
+                )
+            else:
+                st.markdown(
+                    "⚠️ *(La imagen generada ya no está disponible)*"
+                )
+
 
 # ============================================================
-# 12. INPUT DEL CHAT
+# 13. INPUT DEL CHAT
 # ============================================================
 
-prompt = st.chat_input(
-    "Preguntar a ORIA..."
+modo_imagen = st.toggle(
+    "🎨 Generar una imagen en vez de responder",
+    key="modo_imagen",
+    help=(
+        "Actívalo y escribe lo que quieras que ORIA dibuje. "
+        "Desactívalo para volver al chat normal."
+    ),
+)
+
+entrada = st.chat_input(
+    "Pregunta a ORIA, o adjunta una imagen/PDF...",
+    accept_file=True,
+    file_type=["png", "jpg", "jpeg", "pdf"],
 )
 
 
-if prompt:
+if entrada:
 
-    user_text = prompt.strip()
+    user_text = (entrada.text or "").strip()
+    archivo_adjunto = entrada.files[0] if entrada.files else None
 
-    if not user_text:
+    if not user_text and not archivo_adjunto:
         st.stop()
 
     # ========================================================
@@ -762,7 +988,11 @@ if prompt:
             uuid.uuid4()
         )
 
-        titulo = user_text.strip()
+        titulo_base = user_text if user_text else (
+            f"Archivo: {archivo_adjunto.name}" if archivo_adjunto else "Nueva conversación"
+        )
+
+        titulo = titulo_base.strip()
 
         if len(titulo) > 26:
             titulo = titulo[:26] + "..."
@@ -791,10 +1021,19 @@ if prompt:
         ]
     )
 
+    texto_mostrado = user_text
+    if archivo_adjunto:
+        etiqueta_archivo = f"📎 {archivo_adjunto.name}"
+        texto_mostrado = (
+            f"{user_text}\n\n{etiqueta_archivo}"
+            if user_text else etiqueta_archivo
+        )
+
     chat_actual["messages"].append(
         {
             "role": "user",
-            "content": user_text,
+            "type": "text",
+            "content": texto_mostrado,
         }
     )
 
@@ -807,7 +1046,7 @@ if prompt:
     # ========================================================
 
     user_text_html = html.escape(
-        user_text
+        texto_mostrado
     ).replace("\n", "<br>")
 
     content_html = (
@@ -827,25 +1066,140 @@ if prompt:
     # GENERAR RESPUESTA DE ORIA
     # ========================================================
 
+    respuesta_final = None
+
     with st.chat_message("assistant"):
 
-        respuesta_texto = st.write_stream(
-            obtener_respuesta_ia_stream(
-                user_text,
-                chat_actual["messages"],
+        # ----------------------------------------------------
+        # MODO: GENERAR IMAGEN
+        # ----------------------------------------------------
+
+        if modo_imagen and user_text:
+
+            with st.spinner("Generando imagen..."):
+                imagen_bytes, error = generar_imagen_ia(user_text)
+
+            if error:
+                st.error(f"No se pudo generar la imagen: {error}")
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": f"⚠️ No he podido generar la imagen: {error}",
+                }
+            else:
+                os.makedirs(CARPETA_IMAGENES, exist_ok=True)
+                nombre_archivo = os.path.join(
+                    CARPETA_IMAGENES, f"{uuid.uuid4()}.png"
+                )
+
+                with open(nombre_archivo, "wb") as f:
+                    f.write(imagen_bytes)
+
+                st.image(imagen_bytes, caption=user_text)
+
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "image",
+                    "content": nombre_archivo,
+                    "prompt": user_text,
+                }
+
+        # ----------------------------------------------------
+        # MODO: PDF ADJUNTO
+        # ----------------------------------------------------
+
+        elif archivo_adjunto and archivo_adjunto.type == "application/pdf":
+
+            with st.spinner("Leyendo el PDF..."):
+                texto_pdf, error = extraer_texto_pdf(archivo_adjunto)
+
+            if error:
+                st.error(error)
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": f"⚠️ No he podido leer el PDF: {error}",
+                }
+            else:
+                pregunta = user_text if user_text else (
+                    "Resume este documento y destaca los puntos clave."
+                )
+
+                prompt_aumentado = (
+                    f"El usuario ha subido un PDF llamado "
+                    f"'{archivo_adjunto.name}'. Este es el contenido "
+                    f"extraído del documento:\n\n{texto_pdf}\n\n"
+                    f"Petición del usuario sobre el documento: {pregunta}"
+                )
+
+                respuesta_texto = st.write_stream(
+                    obtener_respuesta_ia_stream(
+                        prompt_aumentado,
+                        historial_mensajes=None,
+                        memoria_texto=st.session_state.memoria,
+                    )
+                )
+
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": respuesta_texto,
+                }
+
+        # ----------------------------------------------------
+        # MODO: IMAGEN ADJUNTA (visión)
+        # ----------------------------------------------------
+
+        elif archivo_adjunto and archivo_adjunto.type in (
+            "image/png", "image/jpeg", "image/jpg"
+        ):
+
+            data_uri = imagen_a_data_uri(archivo_adjunto)
+
+            pregunta = user_text if user_text else (
+                "Describe esta imagen y explica qué ves con detalle."
             )
-        )
+
+            respuesta_texto = st.write_stream(
+                obtener_respuesta_ia_stream(
+                    pregunta,
+                    historial_mensajes=None,
+                    imagen_data_uri=data_uri,
+                    memoria_texto=st.session_state.memoria,
+                )
+            )
+
+            respuesta_final = {
+                "role": "assistant",
+                "type": "text",
+                "content": respuesta_texto,
+            }
+
+        # ----------------------------------------------------
+        # MODO: CHAT NORMAL
+        # ----------------------------------------------------
+
+        else:
+
+            respuesta_texto = st.write_stream(
+                obtener_respuesta_ia_stream(
+                    user_text,
+                    historial_mensajes=chat_actual["messages"],
+                    memoria_texto=st.session_state.memoria,
+                )
+            )
+
+            respuesta_final = {
+                "role": "assistant",
+                "type": "text",
+                "content": respuesta_texto,
+            }
 
     # ========================================================
     # GUARDAR RESPUESTA DE LA IA
     # ========================================================
 
-    chat_actual["messages"].append(
-        {
-            "role": "assistant",
-            "content": respuesta_texto,
-        }
-    )
+    chat_actual["messages"].append(respuesta_final)
 
     guardar_chats(
         st.session_state.chats
