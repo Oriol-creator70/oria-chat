@@ -135,9 +135,12 @@ fecha_hoy_str = (
 # Modelo de texto (rápido, para la conversación normal).
 MODELO_GROQ = "openai/gpt-oss-120b"
 
-# Modelo con visión (el único multimodal del catálogo self-serve
-# de Groq). Se usa solo cuando el usuario adjunta una imagen.
-MODELO_GROQ_VISION = "meta-llama/llama-4-scout-17b-16e-instruct"
+# Modelo con visión (el multimodal vigente del catálogo self-serve
+# de Groq a fecha de hoy). Se usa solo cuando el usuario adjunta
+# una imagen. Groq cambia este modelo de vez en cuando: si en el
+# futuro vuelve a dar error 404, comprueba el modelo actual en
+# https://console.groq.com/docs/vision y actualízalo aquí.
+MODELO_GROQ_VISION = "qwen/qwen3.8-27b"
 
 URL_GROQ = "https://api.groq.com/openai/v1/chat/completions"
 
