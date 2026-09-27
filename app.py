@@ -63,10 +63,7 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
   api_key = raw_key.strip().strip('"').strip("'").strip()
 
   if not api_key or not api_key.startswith("gsk_"):
-    yield (
-        "⚠️ **La clave en Secrets no es válida.** Asegúrate de que empieza por"
-        " `gsk_`."
-    )
+    yield "⚠️ **La clave en Secrets no es válida.** Debe empezar por `gsk_`."
     return
 
   headers = {
@@ -91,15 +88,8 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
         role = "user" if msg["role"] == "user" else "assistant"
         messages.append({"role": role, "content": str(msg["content"])})
 
-  # Modelos activos en la infraestructura de Groq
-  modelos_activos = [
-      "llama-3.3-70b-versatile",
-      "llama-3.1-8b-instant",
-      "llama3-8b-8192",
-      "mixtral-8x7b-32768",
-  ]
-
-  errores_acumulados = []
+  # Modelos principales y activos en Groq
+  modelos_activos = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
 
   for model_id in modelos_activos:
     payload = {
@@ -134,26 +124,29 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
               except Exception:
                 pass
         return
+      elif response.status_code == 404:
+        yield (
+            "⚠️ **Error de autorización en Groq (HTTP 404):** Tu API Key no"
+            " tiene acceso al servicio.\n\n👉 Genera una **nueva API Key** en"
+            " [console.groq.com](https://console.groq.com) y guárdala en los"
+            " Secrets de Streamlit."
+        )
+        return
       else:
         try:
           err_json = response.json()
           msg_err = err_json.get("error", {}).get("message", response.text)
         except Exception:
           msg_err = response.text
-        errores_acumulados.append(
-            f"• **{model_id}** (HTTP {response.status_code}): {msg_err}"
+        yield (
+            f"⚠️ **Error de Groq ({model_id} - HTTP {response.status_code}):**"
+            f" {msg_err}"
         )
+        return
 
     except Exception as e:
-      errores_acumulados.append(
-          f"• **{model_id}**: Error de conexión ({str(e)})"
-      )
-
-  yield (
-      "⚠️ **No se pudo obtener respuesta de los modelos de Groq.**\n\nDetalles:"
-      " \n"
-      + "\n".join(errores_acumulados)
-  )
+      yield f"⚠️ **Error de conexión con {model_id}:** {str(e)}"
+      return
 
 
 # 5. Estilos CSS Personalizados
