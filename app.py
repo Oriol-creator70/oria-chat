@@ -50,7 +50,7 @@ meses = [
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
 
-# 4. Conexión con la API de Groq con Diagnóstico
+# 4. Conexión con la API de Groq
 def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
   if "GROQ_API_KEY" not in st.secrets:
     yield (
@@ -68,13 +68,6 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
         " `gsk_`."
     )
     return
-
-  # Generar una versión enmascarada de la clave activa para diagnóstico
-  key_masked = (
-      f"{api_key[:7]}...{api_key[-4:]}"
-      if len(api_key) > 11
-      else "clave_invalida"
-  )
 
   headers = {
       "Authorization": f"Bearer {api_key}",
@@ -98,13 +91,17 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
         role = "user" if msg["role"] == "user" else "assistant"
         messages.append({"role": role, "content": str(msg["content"])})
 
-  modelos = [
+  # Modelos activos en la infraestructura de Groq
+  modelos_activos = [
       "llama-3.3-70b-versatile",
       "llama-3.1-8b-instant",
-      "gemma2-9b-it",
+      "llama3-8b-8192",
+      "mixtral-8x7b-32768",
   ]
 
-  for model_id in modelos:
+  errores_acumulados = []
+
+  for model_id in modelos_activos:
     payload = {
         "model": model_id,
         "messages": messages,
@@ -118,7 +115,7 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
           headers=headers,
           json=payload,
           stream=True,
-          timeout=15,
+          timeout=20,
       )
 
       if response.status_code == 200:
@@ -137,27 +134,25 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
               except Exception:
                 pass
         return
-      elif response.status_code == 404:
-        continue
       else:
-        yield (
-            f"⚠️ **Error HTTP {response.status_code} con clave `{key_masked}`:**"
-            f" {response.text}"
+        try:
+          err_json = response.json()
+          msg_err = err_json.get("error", {}).get("message", response.text)
+        except Exception:
+          msg_err = response.text
+        errores_acumulados.append(
+            f"• **{model_id}** (HTTP {response.status_code}): {msg_err}"
         )
-        return
-    except Exception:
-      continue
+
+    except Exception as e:
+      errores_acumulados.append(
+          f"• **{model_id}**: Error de conexión ({str(e)})"
+      )
 
   yield (
-      f"⚠️ **Groq ha rechazado la clave activa (`{key_masked}`).**\n\n"
-      "**Causa:** La API Key indicada arriba está siendo rechazada por los"
-      " servidores de Groq.\n"
-      "1. Si la clave que aparece ahí (`"
-      f"{key_masked}"
-      "`) NO coincide con tu clave nueva de Console Groq, significa que"
-      " Streamlit no ha actualizado sus Secrets.\n"
-      "2. Si SÍ coincide, verifica en **console.groq.com** que no tengas un"
-      " aviso de confirmación de email pendiente en tu cuenta."
+      "⚠️ **No se pudo obtener respuesta de los modelos de Groq.**\n\nDetalles:"
+      " \n"
+      + "\n".join(errores_acumulados)
   )
 
 
