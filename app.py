@@ -24,11 +24,13 @@ st.set_page_config(
 
 
 # ============================================================
-# 2. BASE DE DATOS LOCAL DE CONVERSACIONES Y MEMORIA
+# 2. BASE DE DATOS LOCAL: CONVERSACIONES Y MEMORIA POR USUARIO
 # ============================================================
 
-DB_FILE = "conversaciones.json"
-MEMORIA_FILE = "memoria.txt"
+# Cada visitante recibe un identificador único (guardado en la URL,
+# ver obtener_uid más abajo) para que su historial y su memoria no
+# se mezclen con los de otras personas que usen la misma app.
+CARPETA_USUARIOS = "usuarios"
 CARPETA_IMAGENES = "imagenes_generadas"
 
 # Cuántos mensajes recientes mandamos como contexto a Groq.
@@ -37,55 +39,62 @@ CARPETA_IMAGENES = "imagenes_generadas"
 MAX_MENSAJES_HISTORIAL = 20
 
 
-def cargar_chats():
-    """Carga las conversaciones guardadas."""
-    if os.path.exists(DB_FILE):
+def obtener_uid():
+    """Da a cada visitante un identificador propio, guardado como
+    parámetro en la URL. Así, cuando varias personas usan la misma
+    app (por ejemplo tus amigos o familia), cada una ve solo sus
+    propias conversaciones y su propia memoria."""
+
+    if "uid" not in st.query_params:
+        nuevo_uid = uuid.uuid4().hex[:10]
+        st.query_params["uid"] = nuevo_uid
+        st.rerun()
+
+    return st.query_params["uid"]
+
+
+def _ruta_datos_usuario(uid):
+    os.makedirs(CARPETA_USUARIOS, exist_ok=True)
+    return os.path.join(CARPETA_USUARIOS, f"{uid}.json")
+
+
+def cargar_datos_usuario(uid):
+    """Carga las conversaciones y la memoria de un usuario concreto."""
+
+    ruta = _ruta_datos_usuario(uid)
+
+    if os.path.exists(ruta):
         try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
+            with open(ruta, "r", encoding="utf-8") as f:
                 datos = json.load(f)
 
                 if isinstance(datos, dict):
+                    datos.setdefault("chats", {})
+                    datos.setdefault("memoria", "")
                     return datos
 
         except Exception:
-            return {}
+            pass
 
-    return {}
+    return {"chats": {}, "memoria": ""}
 
 
-def guardar_chats(chats):
-    """Guarda las conversaciones en JSON."""
+def guardar_datos_usuario(uid, chats, memoria):
+    """Guarda las conversaciones y la memoria de un usuario concreto."""
+
+    ruta = _ruta_datos_usuario(uid)
+
     try:
-        with open(DB_FILE, "w", encoding="utf-8") as f:
+        with open(ruta, "w", encoding="utf-8") as f:
             json.dump(
-                chats,
+                {"chats": chats, "memoria": memoria},
                 f,
                 ensure_ascii=False,
                 indent=2,
             )
 
     except Exception as e:
-        st.error(f"Error al guardar las conversaciones: {e}")
-
-
-def cargar_memoria():
-    """Carga los datos que ORIA debe recordar sobre el usuario."""
-    if os.path.exists(MEMORIA_FILE):
-        try:
-            with open(MEMORIA_FILE, "r", encoding="utf-8") as f:
-                return f.read()
-        except Exception:
-            return ""
-    return ""
-
-
-def guardar_memoria(texto):
-    """Guarda los datos que ORIA debe recordar."""
-    try:
-        with open(MEMORIA_FILE, "w", encoding="utf-8") as f:
-            f.write(texto)
-    except Exception as e:
-        st.error(f"Error al guardar la memoria: {e}")
+        st.error(f"Error al guardar tus datos: {e}")
 
 
 # ============================================================
@@ -212,34 +221,131 @@ def extraer_texto_pdf(archivo_subido):
         return None, str(e)
 
 
-def generar_imagen_ia(prompt_imagen):
-    """Genera una imagen a partir de un texto usando Pollinations.ai
-    (servicio gratuito, no requiere API key). Devuelve (bytes, error)."""
+def obtener_pollinations_key():
+    """API key gratuita opcional de Pollinations.ai (auth.pollinations.ai).
+    Sin ella, las imágenes se generan igual, pero con la marca de agua
+    y límites más estrictos (nivel anónimo)."""
 
     try:
-        prompt_codificado = quote(prompt_imagen)
-        semilla = uuid.uuid4().int % 1_000_000
+        if "POLLINATIONS_API_KEY" not in st.secrets:
+            return None
 
-        url = (
-            f"https://image.pollinations.ai/prompt/{prompt_codificado}"
-            f"?width=1024&height=1024&nologo=true&seed={semilla}"
+        return str(st.secrets["POLLINATIONS_API_KEY"]).strip()
+
+    except Exception:
+        return None
+
+
+def mejorar_prompt_imagen(prompt_simple):
+    """Usa el modelo de texto de Groq para convertir una idea corta
+    del usuario en una descripción rica y detallada, lo que mejora
+    mucho la calidad de la imagen generada. Si algo falla, se queda
+    con el prompt original del usuario."""
+
+    api_key = obtener_api_key()
+
+    if not api_key or not api_key.startswith("gsk_"):
+        return prompt_simple
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": MODELO_GROQ,
+            "stream": False,
+            "temperature": 0.8,
+            "max_completion_tokens": 300,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un experto escribiendo prompts para modelos "
+                        "de generación de imágenes (tipo Flux). Convierte "
+                        "la idea del usuario en una descripción muy "
+                        "detallada y visual, en una sola frase larga: "
+                        "sujeto, estilo artístico, iluminación, encuadre, "
+                        "ambiente y calidad (ej. 'fotografía realista', "
+                        "'8k', 'cinematográfico', 'alto detalle'...). "
+                        "Responde ÚNICAMENTE con el prompt final, sin "
+                        "comillas, explicaciones ni texto adicional."
+                    ),
+                },
+                {"role": "user", "content": prompt_simple},
+            ],
+        }
+
+        respuesta = requests.post(
+            URL_GROQ, headers=headers, json=payload, timeout=20
         )
 
-        respuesta = requests.get(url, timeout=90)
+        if respuesta.status_code == 200:
+            texto = (
+                respuesta.json()
+                .get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
 
-        if (
-            respuesta.status_code == 200
-            and respuesta.headers.get("content-type", "").startswith("image")
-        ):
-            return respuesta.content, None
+            if texto:
+                return texto
 
-        return None, f"El generador de imágenes devolvió el error {respuesta.status_code}."
+        return prompt_simple
 
-    except requests.exceptions.Timeout:
-        return None, "El generador de imágenes ha tardado demasiado. Inténtalo de nuevo."
+    except Exception:
+        return prompt_simple
 
-    except Exception as e:
-        return None, str(e)
+
+def generar_imagen_ia(prompt_imagen, intentos=2):
+    """Genera una imagen a partir de un texto usando Pollinations.ai
+    (servicio gratuito). Si hay una POLLINATIONS_API_KEY configurada
+    en Secrets, se usa para quitar la marca de agua y tener más
+    estabilidad; si no, funciona igualmente en modo anónimo.
+    Devuelve (bytes, error)."""
+
+    token = obtener_pollinations_key()
+
+    prompt_codificado = quote(prompt_imagen)
+    semilla = uuid.uuid4().int % 1_000_000
+
+    url = (
+        f"https://image.pollinations.ai/prompt/{prompt_codificado}"
+        f"?model=flux&width=1024&height=1024"
+        f"&nologo=true&enhance=true&seed={semilla}"
+    )
+
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    ultimo_error = None
+
+    for _ in range(intentos):
+
+        try:
+            respuesta = requests.get(url, headers=headers, timeout=90)
+
+            if (
+                respuesta.status_code == 200
+                and respuesta.headers.get("content-type", "").startswith("image")
+            ):
+                return respuesta.content, None
+
+            ultimo_error = (
+                f"El generador de imágenes devolvió el error "
+                f"{respuesta.status_code}."
+            )
+
+        except requests.exceptions.Timeout:
+            ultimo_error = "El generador de imágenes ha tardado demasiado."
+
+        except Exception as e:
+            ultimo_error = str(e)
+
+    return None, ultimo_error
 
 
 # ============================================================
@@ -669,14 +775,25 @@ st.markdown(
 # 8. SESSION STATE
 # ============================================================
 
+if "uid" not in st.session_state:
+    st.session_state.uid = obtener_uid()
+
 if "chats" not in st.session_state:
-    st.session_state.chats = cargar_chats()
+    _datos_usuario = cargar_datos_usuario(st.session_state.uid)
+    st.session_state.chats = _datos_usuario["chats"]
+    st.session_state.memoria = _datos_usuario["memoria"]
 
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 
-if "memoria" not in st.session_state:
-    st.session_state.memoria = cargar_memoria()
+
+def guardar_todo():
+    """Guarda las conversaciones y la memoria del usuario actual."""
+    guardar_datos_usuario(
+        st.session_state.uid,
+        st.session_state.chats,
+        st.session_state.memoria,
+    )
 
 
 # ============================================================
@@ -777,9 +894,7 @@ with st.sidebar:
 
                 st.session_state.current_chat_id = None
 
-        guardar_chats(
-            st.session_state.chats
-        )
+        guardar_todo()
 
         st.rerun()
 
@@ -805,9 +920,41 @@ with st.sidebar:
         )
 
         if st.button("Guardar memoria", use_container_width=True):
-            guardar_memoria(nueva_memoria)
             st.session_state.memoria = nueva_memoria
+            guardar_todo()
             st.success("Memoria guardada.")
+
+    # --------------------------------------------
+    # CALIDAD DE LAS IMÁGENES (OPCIONAL)
+    # --------------------------------------------
+
+    with st.expander("🎨 Mejorar calidad de imágenes"):
+
+        if obtener_pollinations_key():
+            st.success("Token de Pollinations configurado ✅")
+        else:
+            st.caption(
+                "ORIA ya mejora tus descripciones automáticamente "
+                "antes de generar la imagen. Si además quieres quitar "
+                "la marca de agua y tener menos errores, consigue una "
+                "API key gratuita en "
+                "[auth.pollinations.ai](https://auth.pollinations.ai) "
+                "y añádela en **Settings → Secrets** como:\n\n"
+                "```toml\nPOLLINATIONS_API_KEY = \"tu_token\"\n```"
+            )
+
+    # --------------------------------------------
+    # COMPARTIR ORIA
+    # --------------------------------------------
+
+    with st.expander("🔗 Compartir ORIA"):
+        st.caption(
+            "Comparte el enlace de esta página. Cada persona que "
+            "entre tendrá su propio historial y memoria, separados "
+            "del tuyo. En el móvil, después de cargar la página, "
+            "pueden usar 'Añadir a pantalla de inicio' para que "
+            "funcione como una app."
+        )
 
 
 # ============================================================
@@ -1040,9 +1187,7 @@ if entrada:
         }
     )
 
-    guardar_chats(
-        st.session_state.chats
-    )
+    guardar_todo()
 
     # ========================================================
     # MOSTRAR MENSAJE DEL USUARIO
@@ -1079,8 +1224,11 @@ if entrada:
 
         if modo_imagen and user_text:
 
+            with st.spinner("Puliendo la descripción..."):
+                prompt_mejorado = mejorar_prompt_imagen(user_text)
+
             with st.spinner("Generando imagen..."):
-                imagen_bytes, error = generar_imagen_ia(user_text)
+                imagen_bytes, error = generar_imagen_ia(prompt_mejorado)
 
             if error:
                 st.error(f"No se pudo generar la imagen: {error}")
@@ -1204,9 +1352,7 @@ if entrada:
 
     chat_actual["messages"].append(respuesta_final)
 
-    guardar_chats(
-        st.session_state.chats
-    )
+    guardar_todo()
 
     # ========================================================
     # RECARGAR
