@@ -2,10 +2,8 @@ import json
 import os
 import uuid
 from datetime import datetime
-import requests
+from duckduckgo_search import DDGS
 import streamlit as st
-from google.auth.transport.requests import Request
-from google.oauth2 import service_account
 
 # 1. Configuración de la página
 st.set_page_config(page_title="ORIA", page_icon="✨", layout="wide")
@@ -52,68 +50,20 @@ meses = [
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
 
-# 4. Funciones de Autenticación Vertex AI
-def obtener_token_oauth():
-  """Genera el token de acceso OAuth2 desde los Secrets de Streamlit."""
-  info = dict(st.secrets["gcp_service_account"])
-  if "\\n" in info["private_key"]:
-    info["private_key"] = info["private_key"].replace("\\n", "\n")
-
-  scopes = ["https://www.googleapis.com/auth/cloud-platform"]
-  creds = service_account.Credentials.from_service_account_info(
-      info, scopes=scopes
-  )
-  creds.refresh(Request())
-  return creds.token
-
-
+# 4. Respuesta de IA sin clave API
 def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
-  if historial_mensajes is None:
-    historial_mensajes = []
-
   try:
-    token = obtener_token_oauth()
+    prompt_con_contexto = (
+        f"[Instrucción de sistema: Eres ORIA, una asistente virtual inteligente"
+        f" y atenta. La fecha de hoy es {fecha_hoy_str}. Responde siempre en"
+        f" español.]\n\nUsuario: {prompt_usuario}"
+    )
+
+    # Consulta a la IA pública
+    respuesta = DDGS().chat(prompt_con_contexto, model="llama-3.3-70b")
+    return respuesta
   except Exception as e:
-    return f"⚠️ Error de autenticación en la cuenta de servicio: {str(e)}"
-
-  url = "https://us-central1-aiplatform.googleapis.com/v1/projects/scandx/locations/us-central1/publishers/google/models/gemini-1.5-flash:generateContent"
-
-  headers = {
-      "Content-Type": "application/json",
-      "Authorization": f"Bearer {token}",
-  }
-
-  contents = []
-  for msg in historial_mensajes:
-    if isinstance(msg, dict):
-      role = "user" if msg.get("role") == "user" else "model"
-      contents.append(
-          {"role": role, "parts": [{"text": str(msg.get("content", ""))}]}
-      )
-
-  payload = {
-      "contents": contents,
-      "systemInstruction": {
-          "parts": [
-              {
-                  "text": (
-                      "Eres ORIA, una asistente virtual altamente inteligente,"
-                      f" atenta y muy eficaz. La fecha de hoy es: {fecha_hoy_str}."
-                  )
-              }
-          ]
-      },
-  }
-
-  try:
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code == 200:
-      data = response.json()
-      return data["candidates"][0]["content"]["parts"][0]["text"]
-    else:
-      return f"⚠️ Error en la API ({response.status_code}): {response.text}"
-  except Exception as e:
-    return f"⚠️ Error de conexión: {str(e)}"
+    return f"⚠️ No se pudo procesar la respuesta en este momento: {str(e)}"
 
 
 # 5. Estilos CSS Personalizados
@@ -237,11 +187,10 @@ for message in mensajes_actuales:
     with st.chat_message("assistant"):
       st.markdown(message["content"])
 
-# 11. Entrada de chat principal y procesamiento
+# 11. Entrada de chat principal
 if prompt := st.chat_input("Preguntar a ORIA..."):
   user_text = prompt
 
-  # Crear nuevo chat si no existe uno activo
   if (
       not st.session_state.current_chat_id
       or st.session_state.current_chat_id not in st.session_state.chats
@@ -255,7 +204,6 @@ if prompt := st.chat_input("Preguntar a ORIA..."):
     st.session_state.chats[nuevo_id] = {"title": titulo, "messages": []}
     st.session_state.current_chat_id = nuevo_id
 
-  # Guardar y mostrar mensaje del usuario
   st.session_state.chats[st.session_state.current_chat_id]["messages"].append(
       {"role": "user", "content": user_text}
   )
@@ -267,7 +215,6 @@ if prompt := st.chat_input("Preguntar a ORIA..."):
   )
   st.markdown(content_html, unsafe_allow_html=True)
 
-  # Generar respuesta
   with st.chat_message("assistant"):
     with st.spinner("ORIA está pensando..."):
       respuesta_texto = obtener_respuesta_ia(
@@ -276,7 +223,6 @@ if prompt := st.chat_input("Preguntar a ORIA..."):
       )
       st.markdown(respuesta_texto)
 
-  # Guardar respuesta de la IA
   st.session_state.chats[st.session_state.current_chat_id]["messages"].append(
       {"role": "assistant", "content": respuesta_texto}
   )
