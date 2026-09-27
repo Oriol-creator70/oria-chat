@@ -84,7 +84,7 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
         messages.append({"role": role, "content": str(msg["content"])})
 
   payload = {
-      "model": "llama-3.3-70b-versatile",
+      "model": "llama-3.1-70b-versatile",
       "messages": messages,
       "stream": True,
       "temperature": 0.7,
