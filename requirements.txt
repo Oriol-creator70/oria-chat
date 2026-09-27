@@ -1,4 +1,2 @@
 streamlit
-requests
-google-auth
-Pillow
+duckduckgo_search
