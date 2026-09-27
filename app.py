@@ -51,43 +51,27 @@ fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1
 
 
 # 4. Respuesta de IA libre (sin claves API)
-def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
-  try:
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "Eres ORIA, una asistente virtual altamente inteligente,"
-                f" atenta y amable. La fecha de hoy es {fecha_hoy_str}. Responde"
-                " siempre en español."
-            ),
-        }
-    ]
-
-    if historial_mensajes:
-      for msg in historial_mensajes:
-        if isinstance(msg, dict) and "role" in msg and "content" in msg:
-          role = "user" if msg["role"] == "user" else "assistant"
-          messages.append({"role": role, "content": str(msg["content"])})
-
-    payload = {"messages": messages, "model": "openai"}
-
-    response = requests.post(
-        "https://text.pollinations.ai/", json=payload, timeout=30
-    )
-
-    if response.status_code == 200:
-      return response.text
-    else:
-      return (
-          f"⚠️ Error en el servicio ({response.status_code}): {response.text}"
-      )
-  except Exception as e:
-    return f"⚠️ No se pudo procesar la respuesta: {str(e)}"
+def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
+    try:
+        messages = [{"role": "system", "content": f"Eres ORIA, una asistente virtual inteligente. La fecha de hoy es {fecha_hoy_str}. Responde siempre en español."}]
+        if historial_mensajes:
+            for msg in historial_mensajes:
+                if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                    role = "user" if msg["role"] == "user" else "assistant"
+                    messages.append({"role": role, "content": str(msg["content"])})
+        
+        payload = {"messages": messages, "model": "llama", "stream": True}
+        response = requests.post("https://text.pollinations.ai/", json=payload, stream=True, timeout=30)
+        
+        for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
+            if chunk:
+                yield chunk
+    except Exception as e:
+        yield f"⚠️ Error: {str(e)}"
 
 
 # 5. Estilos CSS Personalizados
-st.markdown(
+respuesta_texto = st.write_stream(obtener_respuesta_ia_stream(user_text, st.session_state.chats[st.session_state.current_chat_id]["messages"]))
     """
     <style>
     [data-testid="stChatMessageAvatarUser"], [data-testid="stChatMessageAvatarAssistant"] {
