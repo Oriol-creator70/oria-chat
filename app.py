@@ -50,7 +50,7 @@ meses = [
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
 
-# 4. Respuesta de IA rápida y con streaming (sin clave API)
+# 4. Respuesta de IA fluida y sin claves API
 def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
   try:
     messages = [{
@@ -67,7 +67,7 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
           role = "user" if msg["role"] == "user" else "assistant"
           messages.append({"role": role, "content": str(msg["content"])})
 
-    payload = {"messages": messages, "model": "llama", "stream": True}
+    payload = {"messages": messages, "model": "openai"}
     response = requests.post(
         "https://text.pollinations.ai/", json=payload, stream=True, timeout=30
     )
