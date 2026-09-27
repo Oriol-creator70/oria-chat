@@ -50,7 +50,7 @@ meses = [
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
 
-# 4. Conexión ultra rápida con Groq (Multimodelo con auto-fallback)
+# 4. Conexión ultra rápida con Groq
 def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
   try:
     api_key = st.secrets["GROQ_API_KEY"]
@@ -62,7 +62,7 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
     return
 
   headers = {
-      "Authorization": f"Bearer {api_key}",
+      "Authorization": f"Bearer {api_key.strip()}",
       "Content-Type": "application/json",
   }
 
@@ -83,56 +83,54 @@ def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
         role = "user" if msg["role"] == "user" else "assistant"
         messages.append({"role": role, "content": str(msg["content"])})
 
-  # Nombres de modelos válidos y estables en la API de Groq
-  modelos_disponibles = [
-      "llama3-8b-8192",
-      "llama3-70b-8192",
-      "mixtral-8x7b-32768",
-      "gemma2-9b-it",
-  ]
+  modelos = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
 
-  response = None
-  for model_id in modelos_disponibles:
+  for model_id in modelos:
     payload = {
         "model": model_id,
         "messages": messages,
         "stream": True,
         "temperature": 0.7,
     }
+
     try:
-      res = requests.post(
+      response = requests.post(
           "https://api.groq.com/openai/v1/chat/completions",
           headers=headers,
           json=payload,
           stream=True,
           timeout=15,
       )
-      if res.status_code == 200:
-        response = res
-        break
+
+      if response.status_code == 200:
+        for line in response.iter_lines():
+          if line:
+            line_str = line.decode("utf-8")
+            if line_str.startswith("data: "):
+              data_json = line_str[6:]
+              if data_json.strip() == "[DONE]":
+                break
+              try:
+                chunk_obj = json.loads(data_json)
+                delta = chunk_obj["choices"][0]["delta"]
+                if "content" in delta:
+                  yield delta["content"]
+              except Exception:
+                pass
+        return
+      elif response.status_code in (401, 403):
+        yield (
+            "⚠️ **API Key revocada por seguridad.** Genera una NUEVA API Key en"
+            " console.groq.com y ponla únicamente en los Secrets de Streamlit."
+        )
+        return
     except Exception:
       continue
 
-  if response and response.status_code == 200:
-    for line in response.iter_lines():
-      if line:
-        line_str = line.decode("utf-8")
-        if line_str.startswith("data: "):
-          data_json = line_str[6:]
-          if data_json.strip() == "[DONE]":
-            break
-          try:
-            chunk_obj = json.loads(data_json)
-            delta = chunk_obj["choices"][0]["delta"]
-            if "content" in delta:
-              yield delta["content"]
-          except Exception:
-            pass
-  else:
-    yield (
-        "⚠️ No se pudo conectar con los servidores de Groq. Revisa tu API Key"
-        " en los Secrets de Streamlit."
-    )
+  yield (
+      "⚠️ No se pudo conectar con Groq. Por favor verifica que tu API Key en"
+      " Streamlit Secrets sea correcta y esté activa."
+  )
 
 
 # 5. Estilos CSS Personalizados
