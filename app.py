@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 from pypdf import PdfReader
 
 
@@ -346,6 +347,59 @@ def generar_imagen_ia(prompt_imagen, intentos=2):
             ultimo_error = str(e)
 
     return None, ultimo_error
+
+
+def transcribir_audio(audio_bytes, nombre_archivo="grabacion.wav"):
+    """Transcribe un audio a texto usando Whisper (incluido en tu misma
+    cuenta de Groq, sin nada nuevo que configurar). Devuelve (texto, error)."""
+
+    api_key = obtener_api_key()
+
+    if not api_key or not api_key.startswith("gsk_"):
+        return None, "No se ha encontrado una GROQ_API_KEY válida."
+
+    try:
+        url = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+        headers = {"Authorization": f"Bearer {api_key}"}
+
+        archivos = {
+            "file": (nombre_archivo, audio_bytes, "audio/wav"),
+        }
+
+        datos = {
+            "model": "whisper-large-v3-turbo",
+            "language": "es",
+            "response_format": "json",
+        }
+
+        respuesta = requests.post(
+            url, headers=headers, files=archivos, data=datos, timeout=60
+        )
+
+        if respuesta.status_code == 200:
+            texto = respuesta.json().get("text", "").strip()
+
+            if texto:
+                return texto, None
+
+            return None, "No se ha detectado voz en el audio."
+
+        try:
+            error_data = respuesta.json()
+            error_message = error_data.get("error", {}).get(
+                "message", respuesta.text
+            )
+        except Exception:
+            error_message = respuesta.text
+
+        return None, f"Error {respuesta.status_code}: {error_message}"
+
+    except requests.exceptions.Timeout:
+        return None, "La transcripción ha tardado demasiado."
+
+    except Exception as e:
+        return None, str(e)
 
 
 # ============================================================
@@ -762,6 +816,30 @@ css_code = """
     border-radius: 8px !important;
 }
 
+/* Ajustes para pantallas de móvil */
+@media (max-width: 640px) {
+
+    .user-bubble {
+        max-width: 88%;
+        padding: 10px 14px;
+        font-size: 0.95rem;
+    }
+
+    h1 {
+        font-size: 2.4rem !important;
+    }
+
+    h3 {
+        font-size: 1.1rem !important;
+    }
+
+    /* Los dos interruptores (imagen/voz) en columna en vez de
+    apretujados uno junto al otro en pantallas estrechas. */
+    div[data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap;
+    }
+}
+
 </style>
 """
 
@@ -928,20 +1006,19 @@ with st.sidebar:
     # CALIDAD DE LAS IMÁGENES (OPCIONAL)
     # --------------------------------------------
 
-    with st.expander("🎨 Mejorar calidad de imágenes"):
+    with st.expander("🎨 Sobre la calidad de las imágenes"):
 
-        if obtener_pollinations_key():
-            st.success("Token de Pollinations configurado ✅")
-        else:
-            st.caption(
-                "ORIA ya mejora tus descripciones automáticamente "
-                "antes de generar la imagen. Si además quieres quitar "
-                "la marca de agua y tener menos errores, consigue una "
-                "API key gratuita en "
-                "[auth.pollinations.ai](https://auth.pollinations.ai) "
-                "y añádela en **Settings → Secrets** como:\n\n"
-                "```toml\nPOLLINATIONS_API_KEY = \"tu_token\"\n```"
-            )
+        st.caption(
+            "ORIA ya mejora automáticamente tu descripción antes de "
+            "generar la imagen (más detalle, mejor estilo). Se usa "
+            "el generador gratuito y anónimo de Pollinations.ai, que "
+            "no requiere cuenta ni pago, pero por eso incluye una "
+            "pequeña marca de agua y a veces algún error puntual bajo "
+            "mucha demanda — es el límite normal de una herramienta "
+            "100% gratuita. Si alguna vez quieres quitarlo del todo, "
+            "existen servicios de pago (OpenAI, Google) con mejor "
+            "calidad y sin marca de agua."
+        )
 
     # --------------------------------------------
     # COMPARTIR ORIA
@@ -1033,7 +1110,7 @@ if len(mensajes_actuales) == 0:
 # 12. MOSTRAR MENSAJES ANTERIORES
 # ============================================================
 
-for message in mensajes_actuales:
+for indice_mensaje, message in enumerate(mensajes_actuales):
 
     role = message.get("role")
     tipo = message.get("type", "text")
@@ -1076,6 +1153,29 @@ for message in mensajes_actuales:
                 str(content)
             )
 
+            # Botón para escuchar la respuesta en voz alta, usando
+            # el sintetizador de voz del propio navegador (gratis,
+            # no necesita ninguna API).
+            texto_para_voz_js = json.dumps(str(content))
+
+            components.html(
+                f"""
+                <div style="margin-top:-6px;">
+                  <button onclick='
+                    window.speechSynthesis.cancel();
+                    var u = new SpeechSynthesisUtterance({texto_para_voz_js});
+                    u.lang = "es-ES";
+                    window.speechSynthesis.speak(u);
+                  ' style="
+                    background:#f4f4f5;border:none;border-radius:14px;
+                    padding:4px 12px;font-size:0.78rem;cursor:pointer;
+                    color:#333;
+                  ">🔊 Escuchar</button>
+                </div>
+                """,
+                height=36,
+            )
+
     # --------------------------------------------
     # MENSAJE DE LA IA (IMAGEN GENERADA)
     # --------------------------------------------
@@ -1099,14 +1199,53 @@ for message in mensajes_actuales:
 # 13. INPUT DEL CHAT
 # ============================================================
 
-modo_imagen = st.toggle(
-    "🎨 Generar una imagen en vez de responder",
-    key="modo_imagen",
-    help=(
-        "Actívalo y escribe lo que quieras que ORIA dibuje. "
-        "Desactívalo para volver al chat normal."
-    ),
-)
+col_toggle_img, col_toggle_voz = st.columns(2)
+
+with col_toggle_img:
+    modo_imagen = st.toggle(
+        "🎨 Generar una imagen en vez de responder",
+        key="modo_imagen",
+        help=(
+            "Actívalo y escribe lo que quieras que ORIA dibuje. "
+            "Desactívalo para volver al chat normal."
+        ),
+    )
+
+with col_toggle_voz:
+    modo_voz = st.toggle(
+        "🎤 Hablar con ORIA",
+        key="modo_voz",
+        help=(
+            "Graba tu pregunta con el micrófono y ORIA te responde "
+            "en texto. Pulsa 🔊 en su respuesta para escucharla en voz."
+        ),
+    )
+
+# --------------------------------------------------------------
+# MODO VOZ: grabar y transcribir automáticamente
+# --------------------------------------------------------------
+
+texto_por_voz = None
+
+if modo_voz:
+
+    audio_grabado = st.audio_input("Pulsa para grabar tu pregunta")
+
+    if audio_grabado is not None:
+
+        audio_bytes = audio_grabado.getvalue()
+        audio_hash = hash(audio_bytes)
+
+        if st.session_state.get("ultimo_audio_procesado") != audio_hash:
+
+            with st.spinner("Transcribiendo tu voz..."):
+                texto_transcrito, error_audio = transcribir_audio(audio_bytes)
+
+            if error_audio:
+                st.error(f"No se pudo transcribir el audio: {error_audio}")
+            elif texto_transcrito:
+                st.session_state.ultimo_audio_procesado = audio_hash
+                texto_por_voz = texto_transcrito
 
 entrada = st.chat_input(
     "Pregunta a ORIA, o adjunta una imagen/PDF...",
@@ -1115,10 +1254,14 @@ entrada = st.chat_input(
 )
 
 
-if entrada:
+if entrada or texto_por_voz:
 
-    user_text = (entrada.text or "").strip()
-    archivo_adjunto = entrada.files[0] if entrada.files else None
+    if entrada:
+        user_text = (entrada.text or "").strip()
+        archivo_adjunto = entrada.files[0] if entrada.files else None
+    else:
+        user_text = texto_por_voz.strip()
+        archivo_adjunto = None
 
     if not user_text and not archivo_adjunto:
         st.stop()
