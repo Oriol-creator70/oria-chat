@@ -50,36 +50,74 @@ meses = [
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
 
-# 4. Respuesta de IA fluida y sin claves API
+# 4. Conexión ultra rápida con Groq (Streaming en tiempo real)
 def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
   try:
-    messages = [{
-        "role": "system",
-        "content": (
-            "Eres ORIA, una asistente virtual altamente inteligente,"
-            f" atenta y amable. La fecha de hoy es {fecha_hoy_str}. Responde"
-            " siempre en español."
-        ),
-    }]
-    if historial_mensajes:
-      for msg in historial_mensajes:
-        if isinstance(msg, dict) and "role" in msg and "content" in msg:
-          role = "user" if msg["role"] == "user" else "assistant"
-          messages.append({"role": role, "content": str(msg["content"])})
+    api_key = st.secrets["GROQ_API_KEY"]
+  except Exception:
+    yield (
+        "⚠️ Falta configurar GROQ_API_KEY en los Secrets de Streamlit."
+        " ¡Consulta las instrucciones!"
+    )
+    return
 
-    payload = {"messages": messages, "model": "openai"}
+  headers = {
+      "Authorization": f"Bearer {api_key}",
+      "Content-Type": "application/json",
+  }
+
+  messages = [{
+      "role": "system",
+      "content": (
+          "Eres ORIA, una asistente virtual brillante, atenta y experta en todo"
+          " tipo de temas (deportes, fútbol, pádel, sociedad, política,"
+          " tecnología y más). La fecha de hoy es"
+          f" {fecha_hoy_str}. Responde siempre en español de forma rápida,"
+          " natural y precisa."
+      ),
+  }]
+
+  if historial_mensajes:
+    for msg in historial_mensajes:
+      if isinstance(msg, dict) and "role" in msg and "content" in msg:
+        role = "user" if msg["role"] == "user" else "assistant"
+        messages.append({"role": role, "content": str(msg["content"])})
+
+  payload = {
+      "model": "llama-3.3-70b-versatile",
+      "messages": messages,
+      "stream": True,
+      "temperature": 0.7,
+  }
+
+  try:
     response = requests.post(
-        "https://text.pollinations.ai/", json=payload, stream=True, timeout=30
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        stream=True,
+        timeout=15,
     )
 
     if response.status_code == 200:
-      for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
-        if chunk:
-          yield chunk
+      for line in response.iter_lines():
+        if line:
+          line_str = line.decode("utf-8")
+          if line_str.startswith("data: "):
+            data_json = line_str[6:]
+            if data_json.strip() == "[DONE]":
+              break
+            try:
+              chunk_obj = json.loads(data_json)
+              delta = chunk_obj["choices"][0]["delta"]
+              if "content" in delta:
+                yield delta["content"]
+            except Exception:
+              pass
     else:
-      yield f"⚠️ Error en el servicio ({response.status_code}): {response.text}"
+      yield f"⚠️ Error en Groq ({response.status_code}): {response.text}"
   except Exception as e:
-    yield f"⚠️ No se pudo procesar la respuesta: {str(e)}"
+    yield f"⚠️ Error de conexión: {str(e)}"
 
 
 # 5. Estilos CSS Personalizados
