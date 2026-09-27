@@ -50,62 +50,72 @@ meses = [
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
 
-# 4. Respuesta de IA libre (sin claves API)
+# 4. Respuesta de IA rápida y con streaming (sin clave API)
 def obtener_respuesta_ia_stream(prompt_usuario, historial_mensajes=None):
-    try:
-        messages = [{"role": "system", "content": f"Eres ORIA, una asistente virtual inteligente. La fecha de hoy es {fecha_hoy_str}. Responde siempre en español."}]
-        if historial_mensajes:
-            for msg in historial_mensajes:
-                if isinstance(msg, dict) and "role" in msg and "content" in msg:
-                    role = "user" if msg["role"] == "user" else "assistant"
-                    messages.append({"role": role, "content": str(msg["content"])})
-        
-        payload = {"messages": messages, "model": "llama", "stream": True}
-        response = requests.post("https://text.pollinations.ai/", json=payload, stream=True, timeout=30)
-        
-        for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
-            if chunk:
-                yield chunk
-    except Exception as e:
-        yield f"⚠️ Error: {str(e)}"
+  try:
+    messages = [{
+        "role": "system",
+        "content": (
+            "Eres ORIA, una asistente virtual altamente inteligente,"
+            f" atenta y amable. La fecha de hoy es {fecha_hoy_str}. Responde"
+            " siempre en español."
+        ),
+    }]
+    if historial_mensajes:
+      for msg in historial_mensajes:
+        if isinstance(msg, dict) and "role" in msg and "content" in msg:
+          role = "user" if msg["role"] == "user" else "assistant"
+          messages.append({"role": role, "content": str(msg["content"])})
+
+    payload = {"messages": messages, "model": "llama", "stream": True}
+    response = requests.post(
+        "https://text.pollinations.ai/", json=payload, stream=True, timeout=30
+    )
+
+    if response.status_code == 200:
+      for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
+        if chunk:
+          yield chunk
+    else:
+      yield f"⚠️ Error en el servicio ({response.status_code}): {response.text}"
+  except Exception as e:
+    yield f"⚠️ No se pudo procesar la respuesta: {str(e)}"
 
 
 # 5. Estilos CSS Personalizados
-respuesta_texto = st.write_stream(obtener_respuesta_ia_stream(user_text, st.session_state.chats[st.session_state.current_chat_id]["messages"]))
-    """
-    <style>
-    [data-testid="stChatMessageAvatarUser"], [data-testid="stChatMessageAvatarAssistant"] {
-        display: none !important;
-    }
-    .stChatMessage {
-        background-color: transparent !important;
-        border: none !important;
-        padding: 4px 0px !important;
-    }
-    .user-bubble-container {
-        display: flex;
-        justify-content: flex-end;
-        width: 100%;
-        margin-bottom: 12px;
-    }
-    .user-bubble {
-        background-color: #f4f4f5;
-        color: #0d0d0d;
-        padding: 12px 18px;
-        border-radius: 20px 20px 4px 20px;
-        max-width: 75%;
-        word-wrap: break-word;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 1rem;
-    }
-    .stSidebar .stButton > button {
-        border-radius: 8px !important;
-    }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
+css_code = """
+<style>
+[data-testid="stChatMessageAvatarUser"], [data-testid="stChatMessageAvatarAssistant"] {
+    display: none !important;
+}
+.stChatMessage {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 4px 0px !important;
+}
+.user-bubble-container {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    margin-bottom: 12px;
+}
+.user-bubble {
+    background-color: #f4f4f5;
+    color: #0d0d0d;
+    padding: 12px 18px;
+    border-radius: 20px 20px 4px 20px;
+    max-width: 75%;
+    word-wrap: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem;
+}
+.stSidebar .stButton > button {
+    border-radius: 8px !important;
+}
+</style>
+"""
+st.markdown(css_code, unsafe_allow_html=True)
 
 # 6. Cargar datos en sesión
 if "chats" not in st.session_state:
@@ -220,12 +230,14 @@ if prompt := st.chat_input("Preguntar a ORIA..."):
   st.markdown(content_html, unsafe_allow_html=True)
 
   with st.chat_message("assistant"):
-    with st.spinner("ORIA está pensando..."):
-      respuesta_texto = obtener_respuesta_ia(
-          user_text,
-          st.session_state.chats[st.session_state.current_chat_id]["messages"],
-      )
-      st.markdown(respuesta_texto)
+    respuesta_texto = st.write_stream(
+        obtener_respuesta_ia_stream(
+            user_text,
+            st.session_state.chats[st.session_state.current_chat_id][
+                "messages"
+            ],
+        )
+    )
 
   st.session_state.chats[st.session_state.current_chat_id]["messages"].append(
       {"role": "assistant", "content": respuesta_texto}
