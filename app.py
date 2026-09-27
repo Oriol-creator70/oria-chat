@@ -2,7 +2,7 @@ import json
 import os
 import uuid
 from datetime import datetime
-from duckduckgo_search import DDGS
+import requests
 import streamlit as st
 
 # 1. Configuración de la página
@@ -50,20 +50,40 @@ meses = [
 fecha_hoy_str = f"{dias[ahora.weekday()]}, {ahora.day} de {meses[ahora.month - 1]} de {ahora.year}"
 
 
-# 4. Respuesta de IA sin clave API
+# 4. Respuesta de IA libre (sin claves API)
 def obtener_respuesta_ia(prompt_usuario, historial_mensajes=None):
   try:
-    prompt_con_contexto = (
-        f"[Instrucción de sistema: Eres ORIA, una asistente virtual inteligente"
-        f" y atenta. La fecha de hoy es {fecha_hoy_str}. Responde siempre en"
-        f" español.]\n\nUsuario: {prompt_usuario}"
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Eres ORIA, una asistente virtual altamente inteligente,"
+                f" atenta y amable. La fecha de hoy es {fecha_hoy_str}. Responde"
+                " siempre en español."
+            ),
+        }
+    ]
+
+    if historial_mensajes:
+      for msg in historial_mensajes:
+        if isinstance(msg, dict) and "role" in msg and "content" in msg:
+          role = "user" if msg["role"] == "user" else "assistant"
+          messages.append({"role": role, "content": str(msg["content"])})
+
+    payload = {"messages": messages, "model": "openai"}
+
+    response = requests.post(
+        "https://text.pollinations.ai/", json=payload, timeout=30
     )
 
-    # Consulta a la IA pública
-    respuesta = DDGS().chat(prompt_con_contexto, model="llama-3.3-70b")
-    return respuesta
+    if response.status_code == 200:
+      return response.text
+    else:
+      return (
+          f"⚠️ Error en el servicio ({response.status_code}): {response.text}"
+      )
   except Exception as e:
-    return f"⚠️ No se pudo procesar la respuesta en este momento: {str(e)}"
+    return f"⚠️ No se pudo procesar la respuesta: {str(e)}"
 
 
 # 5. Estilos CSS Personalizados
