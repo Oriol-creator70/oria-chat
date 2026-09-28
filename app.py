@@ -108,7 +108,10 @@ def obtener_cliente_supabase_auth():
     try:
         from supabase import create_client
         return create_client(url, key)
-    except Exception:
+    except Exception as e:
+        st.session_state["_error_supabase_auth"] = (
+            f"{type(e).__name__}: {e}"
+        )
         return None
 
 
@@ -1655,6 +1658,15 @@ def mostrar_pantalla_login():
             st.info(
                 "El inicio de sesión aún no está configurado. Revisa "
                 "los Secrets de la app."
+            )
+
+        elif st.session_state.get("_error_supabase_auth"):
+            st.warning(
+                "⚠️ El login por correo no ha podido activarse:\n\n"
+                f"`{st.session_state['_error_supabase_auth']}`\n\n"
+                "Comprueba que `requirements.txt` en GitHub tiene la "
+                "línea `supabase>=2.9.0` y que la última versión se "
+                "ha vuelto a subir junto con `app.py`."
             )
 
         # ------------------------------------------------------
