@@ -93,6 +93,77 @@ def _headers_supabase(key, extra=None):
     return headers
 
 
+@st.cache_resource(show_spinner=False)
+def obtener_cliente_supabase_auth():
+    """Cliente de supabase-py, solo para el login por email (código de
+    un solo uso). El resto de datos (chats y memoria) se sigue
+    leyendo/escribiendo con requests, como ya tenías, para no tocar
+    lo que ya funciona."""
+
+    url, key = _config_supabase()
+
+    if not (url and key):
+        return None
+
+    try:
+        from supabase import create_client
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
+def enviar_codigo_login(email):
+    """Pide a Supabase que mande un código de un solo uso a ese
+    correo. Devuelve (ok, error)."""
+
+    cliente = obtener_cliente_supabase_auth()
+
+    if not cliente:
+        return False, "El login por correo no está configurado."
+
+    try:
+        cliente.auth.sign_in_with_otp(
+            {
+                "email": email,
+                "options": {"should_create_user": True},
+            }
+        )
+        return True, None
+
+    except Exception as e:
+        return False, str(e)
+
+
+def verificar_codigo_login(email, codigo):
+    """Comprueba el código de 6 dígitos. Devuelve (email_confirmado, error)."""
+
+    cliente = obtener_cliente_supabase_auth()
+
+    if not cliente:
+        return None, "El login por correo no está configurado."
+
+    try:
+        resultado = cliente.auth.verify_otp(
+            {"email": email, "token": codigo.strip(), "type": "email"}
+        )
+
+        usuario = getattr(resultado, "user", None)
+        email_confirmado = getattr(usuario, "email", None) if usuario else None
+
+        if email_confirmado:
+            return email_confirmado.strip().lower(), None
+
+        return None, "Código incorrecto."
+
+    except Exception as e:
+        mensaje = str(e)
+
+        if "expired" in mensaje.lower() or "invalid" in mensaje.lower():
+            mensaje = "El código no es válido o ha caducado. Pide uno nuevo."
+
+        return None, mensaje
+
+
 def obtener_uid():
     """Modo invitado (solo si el login con Google aún no está
     configurado): da a cada visitante un identificador propio,
@@ -107,16 +178,19 @@ def obtener_uid():
 
 
 def obtener_identidad():
-    """Decide quién es el usuario actual. Si el login con Google está
-    configurado, obliga a iniciar sesión (y para la ejecución mostrando
-    la pantalla de acceso si aún no lo ha hecho). Devuelve un diccionario
-    con id, nombre y si es invitado."""
+    """Decide quién es el usuario actual. Si hay algún método de
+    inicio de sesión configurado (Google y/o correo con Supabase),
+    obliga a entrar por uno de ellos antes de seguir. Devuelve un
+    diccionario con id, nombre y si es invitado."""
 
-    if login_configurado():
+    # 1) Ya ha entrado por correo (código verificado en esta sesión).
+    email_por_correo = st.session_state.get("email_login_verificado")
 
-        if not getattr(st.user, "is_logged_in", False):
-            mostrar_pantalla_login()
-            st.stop()
+    if email_por_correo:
+        return {"id": email_por_correo, "nombre": email_por_correo, "invitado": False}
+
+    # 2) Ya ha entrado con Google.
+    if login_configurado() and getattr(st.user, "is_logged_in", False):
 
         email = str(getattr(st.user, "email", "") or "").strip().lower()
         nombre = str(getattr(st.user, "name", "") or "").strip() or email
@@ -129,8 +203,16 @@ def obtener_identidad():
             st.button("Cerrar sesión", on_click=st.logout)
             st.stop()
 
+        st.session_state.metodo_login = "google"
         return {"id": email, "nombre": nombre, "invitado": False}
 
+    # 3) Hay algún método configurado, pero aún no ha entrado por
+    #    ninguno: mostramos la pantalla de acceso y paramos aquí.
+    if login_configurado() or obtener_cliente_supabase_auth():
+        mostrar_pantalla_login()
+        st.stop()
+
+    # 4) Nada configurado todavía: modo invitado (como hasta ahora).
     return {
         "id": f"invitado:{obtener_uid()}",
         "nombre": "Invitado",
@@ -1311,9 +1393,10 @@ LOGO_HTML = """<div class="oria-brand"><svg width="64" height="64" viewBox="0 0 
 
 
 def mostrar_pantalla_login():
-    """Pantalla de acceso: logo + botón para entrar con Google."""
+    """Pantalla de acceso: logo + correo (código de un solo uso) y,
+    si está configurado, entrar con Google."""
 
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
 
     _c1, _c2, _c3 = st.columns([1, 2, 1])
 
@@ -1322,18 +1405,115 @@ def mostrar_pantalla_login():
         st.markdown(LOGO_HTML, unsafe_allow_html=True)
 
         st.markdown(
-            '<div class="oria-tagline">Inicia sesión para continuar</div>',
+            '<div class="oria-tagline">Te damos la bienvenida a ORIA</div>',
             unsafe_allow_html=True,
         )
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        st.button(
-            "Continuar con Google",
-            on_click=st.login,
-            type="primary",
-            use_container_width=True,
-        )
+        correo_por_codigo_disponible = bool(obtener_cliente_supabase_auth())
+
+        # ------------------------------------------------------
+        # PASO 1: pedir el correo y mandar el código
+        # ------------------------------------------------------
+
+        if correo_por_codigo_disponible and not st.session_state.get(
+            "login_correo_pendiente"
+        ):
+
+            with st.form("form_login_correo", clear_on_submit=False):
+
+                correo_escrito = st.text_input(
+                    "Correo electrónico",
+                    placeholder="tunombre@correo.com",
+                )
+
+                enviar = st.form_submit_button(
+                    "Continuar", type="primary", use_container_width=True
+                )
+
+            if enviar:
+
+                correo_limpio = correo_escrito.strip().lower()
+
+                if "@" not in correo_limpio or "." not in correo_limpio:
+                    st.error("Escribe un correo electrónico válido.")
+                else:
+                    with st.spinner("Enviando el código..."):
+                        ok, error = enviar_codigo_login(correo_limpio)
+
+                    if ok:
+                        st.session_state.login_correo_pendiente = correo_limpio
+                        st.rerun()
+                    else:
+                        st.error(f"No se ha podido enviar el código: {error}")
+
+        # ------------------------------------------------------
+        # PASO 2: verificar el código de 6 dígitos
+        # ------------------------------------------------------
+
+        elif correo_por_codigo_disponible:
+
+            correo_pendiente = st.session_state.login_correo_pendiente
+
+            st.success(f"Te hemos enviado un código a **{correo_pendiente}**.")
+
+            with st.form("form_login_codigo", clear_on_submit=False):
+
+                codigo_escrito = st.text_input(
+                    "Código de 6 dígitos",
+                    placeholder="123456",
+                    max_chars=6,
+                )
+
+                verificar = st.form_submit_button(
+                    "Verificar código", type="primary", use_container_width=True
+                )
+
+            if verificar:
+
+                with st.spinner("Comprobando..."):
+                    email_confirmado, error = verificar_codigo_login(
+                        correo_pendiente, codigo_escrito
+                    )
+
+                if email_confirmado:
+                    st.session_state.email_login_verificado = email_confirmado
+                    st.session_state.metodo_login = "email"
+                    del st.session_state["login_correo_pendiente"]
+                    st.rerun()
+                else:
+                    st.error(error or "Código incorrecto.")
+
+            if st.button("Usar otro correo", use_container_width=True):
+                del st.session_state["login_correo_pendiente"]
+                st.rerun()
+
+        elif not login_configurado():
+            st.info(
+                "El inicio de sesión aún no está configurado. Revisa "
+                "los Secrets de la app."
+            )
+
+        # ------------------------------------------------------
+        # GOOGLE
+        # ------------------------------------------------------
+
+        if login_configurado() and not st.session_state.get(
+            "login_correo_pendiente"
+        ):
+
+            if correo_por_codigo_disponible:
+                st.markdown(
+                    '<p style="text-align:center;color:#999;margin:14px 0;">o</p>',
+                    unsafe_allow_html=True,
+                )
+
+            st.button(
+                "Continuar con Google",
+                on_click=st.login,
+                use_container_width=True,
+            )
 
         st.caption(
             "Tus conversaciones y tu memoria quedan guardadas en tu "
@@ -1559,14 +1739,31 @@ with st.sidebar:
 
     if st.session_state.get("es_invitado"):
         st.caption(
-            "👤 Modo invitado: el inicio de sesión con Google aún no "
-            "está configurado."
+            "👤 Modo invitado: el inicio de sesión aún no está "
+            "configurado."
         )
     else:
         st.caption(f"👤 {st.session_state.get('usuario_nombre', '')}")
+
+        def _cerrar_sesion():
+            if st.session_state.get("metodo_login") == "google":
+                st.logout()
+            else:
+                for _clave in (
+                    "email_login_verificado",
+                    "metodo_login",
+                    "usuario_id",
+                    "usuario_nombre",
+                    "es_invitado",
+                    "chats",
+                    "memoria",
+                    "current_chat_id",
+                ):
+                    st.session_state.pop(_clave, None)
+
         st.button(
             "Cerrar sesión",
-            on_click=st.logout,
+            on_click=_cerrar_sesion,
             use_container_width=True,
         )
 
