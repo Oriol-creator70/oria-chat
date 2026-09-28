@@ -4,8 +4,9 @@ import uuid
 import html
 import base64
 import hashlib
+import re
 from datetime import datetime, timezone
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
@@ -294,6 +295,8 @@ fecha_hoy_str = (
     f"{ahora.year}"
 )
 
+hora_hoy_str = ahora.strftime("%H:%M")
+
 
 # ============================================================
 # 4. CONFIGURACIÓN DE GROQ
@@ -560,6 +563,140 @@ def transcribir_audio(audio_bytes, nombre_archivo="grabacion.wav"):
 
 
 # ============================================================
+# 5B. BÚSQUEDA WEB CON FUENTES (Tavily, plan gratuito)
+# ============================================================
+
+# Frases que indican que la pregunta depende de datos actuales
+# (deportes, noticias, precios...). Si aparecen, ORIA busca en la web
+# automáticamente; además el interruptor "🌐 Web" fuerza la búsqueda.
+PATRON_ACTUALIDAD = re.compile(
+    r"(partido|juega|juegan|jugó|jugaron|resultado|marcador|"
+    r"clasificaci[oó]n|en directo|en vivo|qui[eé]n gan[oó]|"
+    r"cu[aá]ndo juega|a qu[eé] hora|noticias|[uú]ltima hora|"
+    r"[uú]ltimas noticias|ahora mismo|actualmente|cotizaci[oó]n|"
+    r"bitcoin|el tiempo en|previsi[oó]n del tiempo|cartelera|estreno)",
+    re.IGNORECASE,
+)
+
+
+def obtener_tavily_key():
+    """API key gratuita de Tavily (tavily.com) para buscar en la web."""
+
+    try:
+        if "TAVILY_API_KEY" not in st.secrets:
+            return None
+
+        clave = (
+            str(st.secrets["TAVILY_API_KEY"])
+            .strip()
+            .strip('"')
+            .strip("'")
+            .strip()
+        )
+
+        return clave or None
+
+    except Exception:
+        return None
+
+
+def necesita_busqueda(texto):
+    """True si el mensaje parece depender de información actual."""
+    return bool(PATRON_ACTUALIDAD.search(texto or ""))
+
+
+def buscar_en_web(consulta):
+    """Busca en la web con Tavily. Devuelve (resultados, error).
+    Cada resultado es {"titulo", "url", "texto"}. Si el error es
+    "no_configurado", falta TAVILY_API_KEY en Secrets."""
+
+    clave = obtener_tavily_key()
+
+    if not clave:
+        return [], "no_configurado"
+
+    es_actualidad = necesita_busqueda(consulta)
+
+    consulta_final = consulta.strip()[:300]
+
+    if es_actualidad:
+        # Añadimos la fecha para que salgan resultados de hoy.
+        consulta_final += f" {ahora.day} {meses[ahora.month - 1]} {ahora.year}"
+
+    headers = {
+        "Authorization": f"Bearer {clave}",
+        "Content-Type": "application/json",
+    }
+
+    intentos = [{"topic": "news", "time_range": "week"}, {"topic": "general"}]
+
+    if not es_actualidad:
+        intentos = [{"topic": "general"}]
+
+    ultimo_error = None
+
+    for extra in intentos:
+
+        payload = {
+            "query": consulta_final,
+            "search_depth": "basic",
+            "max_results": 5,
+            "include_answer": False,
+        }
+        payload.update(extra)
+
+        try:
+            respuesta = requests.post(
+                "https://api.tavily.com/search",
+                headers=headers,
+                json=payload,
+                timeout=20,
+            )
+
+            if respuesta.status_code != 200:
+                ultimo_error = f"error_{respuesta.status_code}"
+                continue
+
+            resultados = []
+
+            for r in respuesta.json().get("results", [])[:5]:
+
+                url = r.get("url")
+
+                if not url:
+                    continue
+
+                resultados.append(
+                    {
+                        "titulo": (r.get("title") or url)[:120],
+                        "url": url,
+                        "texto": (r.get("content") or "")[:600],
+                    }
+                )
+
+            if resultados:
+                return resultados, None
+
+            ultimo_error = "sin_resultados"
+
+        except Exception as e:
+            ultimo_error = str(e)
+
+    return [], ultimo_error
+
+
+def formatear_contexto_web(resultados):
+    """Convierte los resultados en el texto numerado que ve el modelo."""
+
+    bloques = []
+
+    for i, r in enumerate(resultados, 1):
+        bloques.append(f"[{i}] {r['titulo']} ({r['url']})\n{r['texto']}")
+
+    return "\n\n".join(bloques)
+
+
+# ============================================================
 # 6. FUNCIÓN PRINCIPAL DE LA IA
 # ============================================================
 
@@ -568,6 +705,8 @@ def obtener_respuesta_ia_stream(
     historial_mensajes=None,
     imagen_data_uri=None,
     memoria_texto="",
+    contexto_web="",
+    web_fallida=False,
 ):
     """
     Envía la conversación a Groq y devuelve la respuesta
@@ -623,11 +762,33 @@ def obtener_respuesta_ia_stream(
         "También puedes analizar imágenes y documentos PDF "
         "que el usuario te adjunte, y generar imágenes cuando te "
         "lo pidan. "
-        f"La fecha actual es {fecha_hoy_str}. "
+        f"La fecha actual es {fecha_hoy_str} y la hora en España "
+        f"son las {hora_hoy_str}. "
         "Responde siempre en español, salvo que el usuario "
         "pida expresamente otro idioma. "
-        "Explica las cosas de forma clara y útil."
+        "Explica las cosas de forma clara y útil. "
+        "Nunca inventes marcadores, resultados, noticias, horarios "
+        "ni precios: solo puedes darlos si aparecen en los "
+        "resultados de búsqueda web que se te proporcionan."
     )
+
+    if contexto_web:
+        instrucciones_sistema += (
+            "\n\nSe ha hecho una búsqueda web ahora mismo. Usa estos "
+            "resultados para responder con datos actuales y cita las "
+            "fuentes en el texto con su número entre corchetes, por "
+            "ejemplo [1] o [2]. Si los resultados no responden con "
+            "claridad o se contradicen, dilo con honestidad en vez de "
+            "inventar. Los horarios conviértelos a hora de España. "
+            "Resultados:\n\n" + contexto_web
+        )
+
+    elif web_fallida:
+        instrucciones_sistema += (
+            "\n\nSe intentó buscar en la web pero no ha sido posible. "
+            "Si la pregunta depende de datos de última hora, dilo "
+            "claramente y no inventes nada."
+        )
 
     if memoria_texto and memoria_texto.strip():
         instrucciones_sistema += (
@@ -679,7 +840,7 @@ def obtener_respuesta_ia_stream(
         # quedamos solo con los últimos mensajes hasta llenar un
         # presupuesto de caracteres, para no reventar ese límite.
         LIMITE_CARACTERES_POR_MENSAJE = 6000
-        PRESUPUESTO_CARACTERES_HISTORIAL = 11000
+        PRESUPUESTO_CARACTERES_HISTORIAL = 6000 if contexto_web else 11000
 
         if historial_mensajes:
 
@@ -1040,11 +1201,64 @@ footer {
     font-size: 1rem;
 }
 
-.oria-logo-container {
+/* Logo + nombre: centrados en el mismo eje */
+.oria-brand {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    gap: 14px;
+    width: 100%;
+    text-align: center;
+}
+
+.oria-brand svg {
+    display: block;
+    margin: 0 auto;
+}
+
+.oria-brand-name {
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    /* compensa el espacio que deja el letter-spacing tras la última
+    letra, para que el texto quede centrado de verdad */
+    padding-left: 0.14em;
+    color: #1A1A1A;
+}
+
+.oria-tagline {
+    width: 100%;
+    text-align: center;
+    color: #666;
+    font-size: 1.35rem;
+    font-weight: 400;
+    margin-top: 18px;
+}
+
+/* Interruptores Imagen / Voz / Web: fijos justo encima del cuadro
+de texto, alineados a la izquierda */
+.st-key-barra_modos {
+    position: fixed;
+    bottom: 7.4rem;
+    z-index: 999;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 1.4rem !important;
+    width: auto !important;
+    background: transparent;
+}
+
+.st-key-barra_modos > div {
+    width: auto !important;
+    flex: 0 0 auto !important;
+}
+
+/* Deja hueco abajo para que la barra fija no tape los mensajes */
+[data-testid="stMainBlockContainer"] {
+    padding-bottom: 10rem !important;
 }
 
 .stSidebar .stButton > button {
@@ -1060,8 +1274,17 @@ footer {
         font-size: 0.95rem;
     }
 
-    h3 {
-        font-size: 1.1rem !important;
+    .oria-brand-name {
+        font-size: 2.4rem;
+    }
+
+    .oria-tagline {
+        font-size: 1.1rem;
+    }
+
+    .st-key-barra_modos {
+        bottom: 5.6rem;
+        gap: 1rem !important;
     }
 
     /* Los interruptores en columna en vez de apretujados uno
@@ -1084,6 +1307,9 @@ st.markdown(
 # 8. SESSION STATE
 # ============================================================
 
+LOGO_HTML = """<div class="oria-brand"><svg width="64" height="64" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg"><circle cx="28" cy="28" r="25" fill="none" stroke="#2B2B31" stroke-width="2.5"/><circle cx="28" cy="28" r="9" fill="#2B2B31"/><circle cx="45" cy="13" r="3.5" fill="#2B2B31"/></svg><div class="oria-brand-name">ORIA</div></div>"""
+
+
 def mostrar_pantalla_login():
     """Pantalla de acceso: logo + botón para entrar con Google."""
 
@@ -1093,27 +1319,14 @@ def mostrar_pantalla_login():
 
     with _c2:
 
+        st.markdown(LOGO_HTML, unsafe_allow_html=True)
+
         st.markdown(
-            """
-            <div class="oria-logo-container">
-                <svg width="60" height="60" viewBox="0 0 56 56"
-                     xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="28" cy="28" r="25" fill="none"
-                            stroke="#2B2B31" stroke-width="2.5"/>
-                    <circle cx="28" cy="28" r="9" fill="#2B2B31"/>
-                    <circle cx="45" cy="13" r="3.5" fill="#2B2B31"/>
-                </svg>
-                <h1 style="text-align:center;font-size:3rem;font-weight:700;
-                           letter-spacing:0.05em;margin:0;color:#1A1A1A;">
-                    ORIA
-                </h1>
-            </div>
-            <h3 style="text-align:center;color:#666;font-weight:400;">
-                Inicia sesión para continuar
-            </h3>
-            """,
+            '<div class="oria-tagline">Inicia sesión para continuar</div>',
             unsafe_allow_html=True,
         )
+
+        st.markdown("<br>", unsafe_allow_html=True)
 
         st.button(
             "Continuar con Google",
@@ -1357,6 +1570,11 @@ with st.sidebar:
             use_container_width=True,
         )
 
+    if obtener_tavily_key():
+        st.caption("🌐 Búsqueda web activa")
+    else:
+        st.caption("🌐 Búsqueda web sin configurar")
+
     if supabase_activo():
         st.caption("☁️ Datos guardados en la nube")
     else:
@@ -1408,41 +1626,10 @@ if len(mensajes_actuales) == 0:
 
     with col2:
 
-        st.markdown(
-            """
-            <div class="oria-logo-container">
-                <svg width="60" height="60" viewBox="0 0 56 56"
-                     xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="28" cy="28" r="25" fill="none"
-                            stroke="#2B2B31" stroke-width="2.5"/>
-                    <circle cx="28" cy="28" r="9" fill="#2B2B31"/>
-                    <circle cx="45" cy="13" r="3.5" fill="#2B2B31"/>
-                </svg>
-                <h1 style="
-                    text-align: center;
-                    font-size: 3rem;
-                    font-weight: 700;
-                    letter-spacing: 0.05em;
-                    margin: 0;
-                    color: #1A1A1A;
-                ">
-                    ORIA
-                </h1>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.markdown(LOGO_HTML, unsafe_allow_html=True)
 
         st.markdown(
-            """
-            <h3 style="
-                text-align: center;
-                color: #666;
-                font-weight: 400;
-            ">
-                ¿En qué te puedo ayudar hoy?
-            </h3>
-            """,
+            '<div class="oria-tagline">¿En qué te puedo ayudar hoy?</div>',
             unsafe_allow_html=True,
         )
 
@@ -1498,6 +1685,21 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
             st.markdown(
                 str(content)
             )
+
+            # Fuentes consultadas en la web (si las hubo)
+            fuentes = message.get("sources") or []
+
+            if fuentes:
+                with st.expander(f"🔎 Fuentes ({len(fuentes)})"):
+                    for n, fuente in enumerate(fuentes, 1):
+                        titulo = (
+                            str(fuente.get("title", ""))
+                            .replace("[", "(")
+                            .replace("]", ")")
+                        )
+                        url = str(fuente.get("url", ""))
+                        dominio = urlparse(url).netloc.replace("www.", "")
+                        st.markdown(f"**[{n}]** [{titulo}]({url}) · {dominio}")
 
             # Botones de acción bajo la respuesta: escuchar en voz
             # (sintetizador del navegador, gratis) y copiar al
@@ -1559,27 +1761,10 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
 # 13. INPUT DEL CHAT
 # ============================================================
 
-col_toggle_img, col_toggle_voz, col_relleno = st.columns([0.16, 0.14, 0.70])
-
-with col_toggle_img:
-    modo_imagen = st.toggle(
-        "🎨 Imagen",
-        key="modo_imagen",
-        help=(
-            "Actívalo y escribe lo que quieras que ORIA dibuje. "
-            "Desactívalo para volver al chat normal."
-        ),
-    )
-
-with col_toggle_voz:
-    modo_voz = st.toggle(
-        "🎤 Voz",
-        key="modo_voz",
-        help=(
-            "Graba tu pregunta con el micrófono y ORIA te responde "
-            "en texto. Pulsa 🔊 en su respuesta para escucharla en voz."
-        ),
-    )
+with st.container(key="barra_modos"):
+    modo_imagen = st.toggle("🎨 Imagen", key="modo_imagen")
+    modo_voz = st.toggle("🎤 Voz", key="modo_voz")
+    modo_web = st.toggle("🌐 Web", key="modo_web")
 
 # --------------------------------------------------------------
 # MODO VOZ: grabar y transcribir automáticamente
@@ -1835,11 +2020,51 @@ if entrada or texto_por_voz:
 
         else:
 
+            resultados_web = []
+            web_fallida = False
+
+            if modo_web or necesita_busqueda(user_text):
+
+                # Si el mensaje es muy corto ("¿y mañana?"), le
+                # sumamos la pregunta anterior para dar contexto.
+                consulta = user_text
+
+                if len(user_text) < 25:
+                    previos = [
+                        m["content"]
+                        for m in chat_actual["messages"][:-1]
+                        if m.get("role") == "user"
+                        and m.get("type", "text") == "text"
+                    ]
+                    if previos:
+                        consulta = f"{previos[-1][:200]} {user_text}"
+
+                with st.spinner("Buscando en la web..."):
+                    resultados_web, error_web = buscar_en_web(consulta)
+
+                if not resultados_web:
+                    web_fallida = True
+
+                    if error_web == "no_configurado":
+                        st.caption(
+                            "🌐 La búsqueda web no está configurada "
+                            "todavía, así que no puedo confirmar datos "
+                            "de última hora."
+                        )
+                    else:
+                        st.caption(
+                            "🌐 No he podido consultar la web ahora "
+                            "mismo."
+                        )
+
             respuesta_texto = st.write_stream(
                 obtener_respuesta_ia_stream(
                     user_text,
                     historial_mensajes=chat_actual["messages"],
                     memoria_texto=st.session_state.memoria,
+                    contexto_web=formatear_contexto_web(resultados_web)
+                    if resultados_web else "",
+                    web_fallida=web_fallida,
                 )
             )
 
@@ -1848,6 +2073,12 @@ if entrada or texto_por_voz:
                 "type": "text",
                 "content": respuesta_texto,
             }
+
+            if resultados_web:
+                respuesta_final["sources"] = [
+                    {"title": r["titulo"], "url": r["url"]}
+                    for r in resultados_web
+                ]
 
     # ========================================================
     # GUARDAR RESPUESTA DE LA IA
