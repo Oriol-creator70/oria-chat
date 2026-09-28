@@ -509,16 +509,26 @@ def obtener_respuesta_ia_stream(
         )
 
     # --------------------------------------------------------
-    # Modo texto normal: con historial (recortado)
+    # Modo texto normal: con historial recortado por caracteres
     # --------------------------------------------------------
 
     else:
 
         modelo_usar = MODELO_GROQ
 
+        # El plan gratuito de Groq tiene un límite de tokens por
+        # minuto bastante ajustado. Truncamos mensajes individuales
+        # muy largos (p. ej. un código pegado entero) y además nos
+        # quedamos solo con los últimos mensajes hasta llenar un
+        # presupuesto de caracteres, para no reventar ese límite.
+        LIMITE_CARACTERES_POR_MENSAJE = 3000
+        PRESUPUESTO_CARACTERES_HISTORIAL = 7000
+
         if historial_mensajes:
 
             recientes = historial_mensajes[-MAX_MENSAJES_HISTORIAL:]
+
+            mensajes_preparados = []
 
             for msg in recientes:
 
@@ -532,7 +542,7 @@ def obtener_respuesta_ia_stream(
                 # no se pueden mandar como texto; los resumimos.
                 if msg.get("type") == "image":
                     if msg["role"] == "assistant":
-                        messages.append(
+                        mensajes_preparados.append(
                             {
                                 "role": "assistant",
                                 "content": (
@@ -552,12 +562,41 @@ def obtener_respuesta_ia_stream(
                 else:
                     continue
 
-                messages.append(
-                    {
-                        "role": role,
-                        "content": str(msg["content"]),
-                    }
+                contenido = str(msg["content"])
+
+                if len(contenido) > LIMITE_CARACTERES_POR_MENSAJE:
+                    contenido = (
+                        contenido[:LIMITE_CARACTERES_POR_MENSAJE]
+                        + "\n\n[...mensaje truncado por longitud...]"
+                    )
+
+                mensajes_preparados.append(
+                    {"role": role, "content": contenido}
                 )
+
+            # Recorremos de más reciente a más antiguo llenando el
+            # presupuesto de caracteres. Siempre dejamos pasar al
+            # menos el último mensaje, aunque él solo se acerque al
+            # límite, para no dejar la conversación sin nada que
+            # mandar.
+            mensajes_incluidos = []
+            caracteres_acumulados = 0
+
+            for msg in reversed(mensajes_preparados):
+
+                longitud = len(msg["content"])
+
+                if (
+                    mensajes_incluidos
+                    and caracteres_acumulados + longitud
+                    > PRESUPUESTO_CARACTERES_HISTORIAL
+                ):
+                    break
+
+                caracteres_acumulados += longitud
+                mensajes_incluidos.insert(0, msg)
+
+            messages.extend(mensajes_incluidos)
 
         # Si por alguna razón no tenemos historial,
         # añadimos el mensaje actual.
@@ -578,6 +617,7 @@ def obtener_respuesta_ia_stream(
         "messages": messages,
         "stream": True,
         "temperature": 0.7,
+        "max_completion_tokens": 1024,
     }
 
     # --------------------------------------------------------
@@ -703,6 +743,22 @@ def obtener_respuesta_ia_stream(
             return
 
         # ====================================================
+        # MENSAJE DEMASIADO GRANDE (413)
+        # ====================================================
+
+        if response.status_code == 413:
+
+            yield (
+                "⚠️ **La conversación se ha quedado demasiado larga "
+                "para el plan gratuito de Groq en este momento "
+                "(demasiados tokens por minuto).**\n\n"
+                "Prueba a pulsar '➕ Nueva conversación' para empezar "
+                "de cero, o espera un minuto y vuelve a intentarlo."
+            )
+
+            return
+
+        # ====================================================
         # OTROS ERRORES
         # ====================================================
 
@@ -776,6 +832,21 @@ def obtener_respuesta_ia_stream(
 css_code = """
 <style>
 
+/* Oculta la barra de herramientas de Streamlit (menú, Share,
+GitHub, editar...) para que la app se vea como un producto propio,
+no como un proyecto de Streamlit. Nota: si eres tú quien ha
+publicado la app y entras logueado en Streamlit Cloud, es posible
+que sigas viendo el aviso "Manage app" abajo a la derecha — eso lo
+pone la plataforma por fuera de la app y solo tú lo ves, no tus
+amigos ni familiares. */
+#MainMenu,
+header[data-testid="stHeader"],
+[data-testid="stToolbar"],
+footer {
+    visibility: hidden;
+    height: 0;
+}
+
 [data-testid="stChatMessageAvatarUser"],
 [data-testid="stChatMessageAvatarAssistant"] {
     display: none !important;
@@ -795,8 +866,8 @@ css_code = """
 }
 
 .user-bubble {
-    background-color: #f4f4f5;
-    color: #0d0d0d;
+    background-color: #F5F5F4;
+    color: #1A1A1A;
     padding: 12px 18px;
     border-radius: 20px 20px 4px 20px;
     max-width: 75%;
@@ -812,6 +883,13 @@ css_code = """
     font-size: 1rem;
 }
 
+.oria-logo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
 .stSidebar .stButton > button {
     border-radius: 8px !important;
 }
@@ -825,16 +903,12 @@ css_code = """
         font-size: 0.95rem;
     }
 
-    h1 {
-        font-size: 2.4rem !important;
-    }
-
     h3 {
         font-size: 1.1rem !important;
     }
 
-    /* Los dos interruptores (imagen/voz) en columna en vez de
-    apretujados uno junto al otro en pantallas estrechas. */
+    /* Los interruptores en columna en vez de apretujados uno
+    junto al otro en pantallas estrechas. */
     div[data-testid="stHorizontalBlock"] {
         flex-wrap: wrap;
     }
@@ -880,7 +954,22 @@ def guardar_todo():
 
 with st.sidebar:
 
-    st.title("Conversaciones")
+    st.markdown(
+        """
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <svg width="26" height="26" viewBox="0 0 56 56"
+                 xmlns="http://www.w3.org/2000/svg">
+                <circle cx="28" cy="28" r="25" fill="none"
+                        stroke="#2B2B31" stroke-width="3"/>
+                <circle cx="28" cy="28" r="9" fill="#2B2B31"/>
+                <circle cx="45" cy="13" r="3.5" fill="#2B2B31"/>
+            </svg>
+            <span style="font-size:1.3rem;font-weight:700;letter-spacing:0.04em;">ORIA</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("Conversaciones")
 
     # --------------------------------------------
     # NUEVA CONVERSACIÓN
@@ -1077,13 +1166,25 @@ if len(mensajes_actuales) == 0:
 
         st.markdown(
             """
-            <h1 style="
-                text-align: center;
-                font-size: 3.5rem;
-                font-weight: bold;
-            ">
-                ORIA
-            </h1>
+            <div class="oria-logo-container">
+                <svg width="60" height="60" viewBox="0 0 56 56"
+                     xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="28" cy="28" r="25" fill="none"
+                            stroke="#2B2B31" stroke-width="2.5"/>
+                    <circle cx="28" cy="28" r="9" fill="#2B2B31"/>
+                    <circle cx="45" cy="13" r="3.5" fill="#2B2B31"/>
+                </svg>
+                <h1 style="
+                    text-align: center;
+                    font-size: 3rem;
+                    font-weight: 700;
+                    letter-spacing: 0.05em;
+                    margin: 0;
+                    color: #1A1A1A;
+                ">
+                    ORIA
+                </h1>
+            </div>
             """,
             unsafe_allow_html=True,
         )
@@ -1093,6 +1194,7 @@ if len(mensajes_actuales) == 0:
             <h3 style="
                 text-align: center;
                 color: #666;
+                font-weight: 400;
             ">
                 ¿En qué te puedo ayudar hoy?
             </h3>
@@ -1153,28 +1255,42 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
                 str(content)
             )
 
-            # Botón para escuchar la respuesta en voz alta, usando
-            # el sintetizador de voz del propio navegador (gratis,
-            # no necesita ninguna API).
-            texto_para_voz_js = json.dumps(str(content))
+            # Botones de acción bajo la respuesta: escuchar en voz
+            # (sintetizador del navegador, gratis) y copiar al
+            # portapapeles (API del navegador, gratis). No necesitan
+            # ninguna llamada al servidor.
+            texto_js = json.dumps(str(content))
+            id_boton_copiar = f"copiar_{indice_mensaje}"
 
             components.html(
                 f"""
-                <div style="margin-top:-6px;">
+                <div style="margin-top:-6px;display:flex;gap:8px;">
                   <button onclick='
                     window.speechSynthesis.cancel();
-                    var u = new SpeechSynthesisUtterance({texto_para_voz_js});
+                    var u = new SpeechSynthesisUtterance({texto_js});
                     u.lang = "es-ES";
                     window.speechSynthesis.speak(u);
                   ' style="
-                    background:#f4f4f5;border:none;border-radius:14px;
+                    background:#F5F5F4;border:none;border-radius:14px;
                     padding:4px 12px;font-size:0.78rem;cursor:pointer;
                     color:#333;
                   ">🔊 Escuchar</button>
+
+                  <button id="{id_boton_copiar}" onclick='
+                    navigator.clipboard.writeText({texto_js});
+                    var b = document.getElementById("{id_boton_copiar}");
+                    b.innerText = "✅ Copiado";
+                    setTimeout(function() {{ b.innerText = "📋 Copiar"; }}, 1500);
+                  ' style="
+                    background:#F5F5F4;border:none;border-radius:14px;
+                    padding:4px 12px;font-size:0.78rem;cursor:pointer;
+                    color:#333;
+                  ">📋 Copiar</button>
                 </div>
                 """,
                 height=36,
             )
+
 
     # --------------------------------------------
     # MENSAJE DE LA IA (IMAGEN GENERADA)
@@ -1199,11 +1315,11 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
 # 13. INPUT DEL CHAT
 # ============================================================
 
-col_toggle_img, col_toggle_voz = st.columns(2)
+col_toggle_img, col_toggle_voz, col_relleno = st.columns([0.16, 0.14, 0.70])
 
 with col_toggle_img:
     modo_imagen = st.toggle(
-        "🎨 Generar una imagen en vez de responder",
+        "🎨 Imagen",
         key="modo_imagen",
         help=(
             "Actívalo y escribe lo que quieras que ORIA dibuje. "
@@ -1213,7 +1329,7 @@ with col_toggle_img:
 
 with col_toggle_voz:
     modo_voz = st.toggle(
-        "🎤 Hablar con ORIA",
+        "🎤 Voz",
         key="modo_voz",
         help=(
             "Graba tu pregunta con el micrófono y ORIA te responde "
