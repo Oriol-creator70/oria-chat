@@ -3,7 +3,8 @@ import os
 import uuid
 import html
 import base64
-from datetime import datetime
+import hashlib
+from datetime import datetime, timezone
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -25,14 +26,19 @@ st.set_page_config(
 
 
 # ============================================================
-# 2. BASE DE DATOS LOCAL: CONVERSACIONES Y MEMORIA POR USUARIO
+# 2. ALMACENAMIENTO: CUENTAS, NUBE (SUPABASE) Y COPIA LOCAL
 # ============================================================
 
-# Cada visitante recibe un identificador único (guardado en la URL,
-# ver obtener_uid más abajo) para que su historial y su memoria no
-# se mezclen con los de otras personas que usen la misma app.
+# Cada usuario se identifica por su correo (si ha iniciado sesión con
+# Google) o, si el login aún no está configurado, por un identificador
+# de invitado guardado en la URL. Los datos (chats + memoria) se guardan:
+#   - en Supabase (base de datos en la nube) si está configurado, para
+#     que la cuenta funcione igual en cualquier dispositivo y no se
+#     borre cuando Streamlit reinicia el servidor;
+#   - o, si no, en archivos JSON locales (se pueden perder al reiniciar).
 CARPETA_USUARIOS = "usuarios"
 CARPETA_IMAGENES = "imagenes_generadas"
+TABLA_SUPABASE = "oria_usuarios"
 
 # Cuántos mensajes recientes mandamos como contexto a Groq.
 # Evita que las conversaciones muy largas se coman el contexto
@@ -40,11 +46,56 @@ CARPETA_IMAGENES = "imagenes_generadas"
 MAX_MENSAJES_HISTORIAL = 20
 
 
+def login_configurado():
+    """True si en Secrets existe la sección [auth] (login con Google)."""
+    try:
+        return "auth" in st.secrets
+    except Exception:
+        return False
+
+
+def _config_supabase():
+    """Devuelve (url, key) de Supabase, o (None, None) si no está
+    configurado en Secrets."""
+    try:
+        url = str(st.secrets["SUPABASE_URL"]).strip().strip('"').rstrip("/")
+        key = str(st.secrets["SUPABASE_KEY"]).strip().strip('"')
+
+        if url and key:
+            return url, key
+
+    except Exception:
+        pass
+
+    return None, None
+
+
+def supabase_activo():
+    url, key = _config_supabase()
+    return bool(url and key)
+
+
+def _headers_supabase(key, extra=None):
+    headers = {
+        "apikey": key,
+        "Content-Type": "application/json",
+    }
+
+    # Las claves antiguas (service_role) son JWT y también van en
+    # Authorization; las nuevas (sb_secret_...) solo en apikey.
+    if key.startswith("eyJ"):
+        headers["Authorization"] = f"Bearer {key}"
+
+    if extra:
+        headers.update(extra)
+
+    return headers
+
+
 def obtener_uid():
-    """Da a cada visitante un identificador propio, guardado como
-    parámetro en la URL. Así, cuando varias personas usan la misma
-    app (por ejemplo tus amigos o familia), cada una ve solo sus
-    propias conversaciones y su propia memoria."""
+    """Modo invitado (solo si el login con Google aún no está
+    configurado): da a cada visitante un identificador propio,
+    guardado como parámetro en la URL."""
 
     if "uid" not in st.query_params:
         nuevo_uid = uuid.uuid4().hex[:10]
@@ -54,15 +105,46 @@ def obtener_uid():
     return st.query_params["uid"]
 
 
-def _ruta_datos_usuario(uid):
+def obtener_identidad():
+    """Decide quién es el usuario actual. Si el login con Google está
+    configurado, obliga a iniciar sesión (y para la ejecución mostrando
+    la pantalla de acceso si aún no lo ha hecho). Devuelve un diccionario
+    con id, nombre y si es invitado."""
+
+    if login_configurado():
+
+        if not getattr(st.user, "is_logged_in", False):
+            mostrar_pantalla_login()
+            st.stop()
+
+        email = str(getattr(st.user, "email", "") or "").strip().lower()
+        nombre = str(getattr(st.user, "name", "") or "").strip() or email
+
+        if not email:
+            st.error(
+                "Google no ha devuelto tu correo. Cierra sesión e "
+                "inténtalo de nuevo."
+            )
+            st.button("Cerrar sesión", on_click=st.logout)
+            st.stop()
+
+        return {"id": email, "nombre": nombre, "invitado": False}
+
+    return {
+        "id": f"invitado:{obtener_uid()}",
+        "nombre": "Invitado",
+        "invitado": True,
+    }
+
+
+def _ruta_datos_usuario(usuario_id):
     os.makedirs(CARPETA_USUARIOS, exist_ok=True)
-    return os.path.join(CARPETA_USUARIOS, f"{uid}.json")
+    nombre = hashlib.sha256(usuario_id.encode("utf-8")).hexdigest()[:24]
+    return os.path.join(CARPETA_USUARIOS, f"{nombre}.json")
 
 
-def cargar_datos_usuario(uid):
-    """Carga las conversaciones y la memoria de un usuario concreto."""
-
-    ruta = _ruta_datos_usuario(uid)
+def _cargar_local(usuario_id):
+    ruta = _ruta_datos_usuario(usuario_id)
 
     if os.path.exists(ruta):
         try:
@@ -80,22 +162,97 @@ def cargar_datos_usuario(uid):
     return {"chats": {}, "memoria": ""}
 
 
-def guardar_datos_usuario(uid, chats, memoria):
-    """Guarda las conversaciones y la memoria de un usuario concreto."""
+def _guardar_local(usuario_id, chats, memoria):
+    ruta = _ruta_datos_usuario(usuario_id)
 
-    ruta = _ruta_datos_usuario(uid)
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump(
+            {"chats": chats, "memoria": memoria},
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+
+def cargar_datos_usuario(usuario_id):
+    """Carga chats y memoria del usuario. Devuelve (datos, ok).
+    Si falla la nube devuelve ok=False para NO seguir adelante con
+    datos vacíos (así no se sobrescribe lo que ya tenía guardado)."""
+
+    url, key = _config_supabase()
+
+    if not (url and key):
+        return _cargar_local(usuario_id), True
 
     try:
-        with open(ruta, "w", encoding="utf-8") as f:
-            json.dump(
-                {"chats": chats, "memoria": memoria},
-                f,
-                ensure_ascii=False,
-                indent=2,
+        respuesta = requests.get(
+            f"{url}/rest/v1/{TABLA_SUPABASE}",
+            headers=_headers_supabase(key),
+            params={
+                "email": f"eq.{usuario_id}",
+                "select": "chats,memoria",
+            },
+            timeout=20,
+        )
+
+        if respuesta.status_code != 200:
+            return None, False
+
+        filas = respuesta.json()
+
+        if not filas:
+            return {"chats": {}, "memoria": ""}, True
+
+        fila = filas[0]
+        chats = fila.get("chats") or {}
+        memoria = fila.get("memoria") or ""
+
+        if not isinstance(chats, dict):
+            chats = {}
+
+        return {"chats": chats, "memoria": memoria}, True
+
+    except Exception:
+        return None, False
+
+
+def guardar_datos_usuario(usuario_id, chats, memoria):
+    """Guarda chats y memoria del usuario (nube si está configurada,
+    y si no, archivo local)."""
+
+    url, key = _config_supabase()
+
+    if not (url and key):
+        try:
+            _guardar_local(usuario_id, chats, memoria)
+        except Exception as e:
+            st.error(f"Error al guardar tus datos: {e}")
+        return
+
+    try:
+        respuesta = requests.post(
+            f"{url}/rest/v1/{TABLA_SUPABASE}",
+            headers=_headers_supabase(
+                key,
+                {"Prefer": "resolution=merge-duplicates,return=minimal"},
+            ),
+            json={
+                "email": usuario_id,
+                "chats": chats,
+                "memoria": memoria,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            timeout=20,
+        )
+
+        if respuesta.status_code not in (200, 201, 204):
+            st.error(
+                "No se han podido guardar tus datos en la nube "
+                f"(error {respuesta.status_code})."
             )
 
     except Exception as e:
-        st.error(f"Error al guardar tus datos: {e}")
+        st.error(f"No se han podido guardar tus datos en la nube: {e}")
 
 
 # ============================================================
@@ -521,8 +678,8 @@ def obtener_respuesta_ia_stream(
         # muy largos (p. ej. un código pegado entero) y además nos
         # quedamos solo con los últimos mensajes hasta llenar un
         # presupuesto de caracteres, para no reventar ese límite.
-        LIMITE_CARACTERES_POR_MENSAJE = 3000
-        PRESUPUESTO_CARACTERES_HISTORIAL = 7000
+        LIMITE_CARACTERES_POR_MENSAJE = 6000
+        PRESUPUESTO_CARACTERES_HISTORIAL = 11000
 
         if historial_mensajes:
 
@@ -927,13 +1084,73 @@ st.markdown(
 # 8. SESSION STATE
 # ============================================================
 
-if "uid" not in st.session_state:
-    st.session_state.uid = obtener_uid()
+def mostrar_pantalla_login():
+    """Pantalla de acceso: logo + botón para entrar con Google."""
 
-if "chats" not in st.session_state:
-    _datos_usuario = cargar_datos_usuario(st.session_state.uid)
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
+
+    _c1, _c2, _c3 = st.columns([1, 2, 1])
+
+    with _c2:
+
+        st.markdown(
+            """
+            <div class="oria-logo-container">
+                <svg width="60" height="60" viewBox="0 0 56 56"
+                     xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="28" cy="28" r="25" fill="none"
+                            stroke="#2B2B31" stroke-width="2.5"/>
+                    <circle cx="28" cy="28" r="9" fill="#2B2B31"/>
+                    <circle cx="45" cy="13" r="3.5" fill="#2B2B31"/>
+                </svg>
+                <h1 style="text-align:center;font-size:3rem;font-weight:700;
+                           letter-spacing:0.05em;margin:0;color:#1A1A1A;">
+                    ORIA
+                </h1>
+            </div>
+            <h3 style="text-align:center;color:#666;font-weight:400;">
+                Inicia sesión para continuar
+            </h3>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.button(
+            "Continuar con Google",
+            on_click=st.login,
+            type="primary",
+            use_container_width=True,
+        )
+
+        st.caption(
+            "Tus conversaciones y tu memoria quedan guardadas en tu "
+            "cuenta y las tendrás en cualquier dispositivo."
+        )
+
+
+# Identidad del usuario (si el login está configurado y aún no ha
+# entrado, aquí se muestra la pantalla de acceso y se detiene todo).
+_identidad = obtener_identidad()
+
+# Cargamos sus datos al entrar o si cambia de cuenta.
+if st.session_state.get("usuario_id") != _identidad["id"]:
+
+    _datos_usuario, _ok = cargar_datos_usuario(_identidad["id"])
+
+    if not _ok:
+        st.error(
+            "No se han podido cargar tus datos en este momento. "
+            "Recarga la página en unos segundos. (Por seguridad no "
+            "continúo para no sobrescribir tus conversaciones.)"
+        )
+        st.stop()
+
+    st.session_state.usuario_id = _identidad["id"]
+    st.session_state.usuario_nombre = _identidad["nombre"]
+    st.session_state.es_invitado = _identidad["invitado"]
     st.session_state.chats = _datos_usuario["chats"]
     st.session_state.memoria = _datos_usuario["memoria"]
+    st.session_state.current_chat_id = None
 
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
@@ -942,7 +1159,7 @@ if "current_chat_id" not in st.session_state:
 def guardar_todo():
     """Guarda las conversaciones y la memoria del usuario actual."""
     guardar_datos_usuario(
-        st.session_state.uid,
+        st.session_state.usuario_id,
         st.session_state.chats,
         st.session_state.memoria,
     )
@@ -1115,11 +1332,38 @@ with st.sidebar:
 
     with st.expander("🔗 Compartir ORIA"):
         st.caption(
-            "Comparte el enlace de esta página. Cada persona que "
-            "entre tendrá su propio historial y memoria, separados "
-            "del tuyo. En el móvil, después de cargar la página, "
-            "pueden usar 'Añadir a pantalla de inicio' para que "
-            "funcione como una app."
+            "Comparte el enlace de esta página. Cada persona entra "
+            "con su propia cuenta y tiene su historial y memoria "
+            "separados del tuyo. En el móvil pueden usar 'Añadir a "
+            "pantalla de inicio' para que funcione como una app."
+        )
+
+    # --------------------------------------------
+    # CUENTA
+    # --------------------------------------------
+
+    st.markdown("---")
+
+    if st.session_state.get("es_invitado"):
+        st.caption(
+            "👤 Modo invitado: el inicio de sesión con Google aún no "
+            "está configurado."
+        )
+    else:
+        st.caption(f"👤 {st.session_state.get('usuario_nombre', '')}")
+        st.button(
+            "Cerrar sesión",
+            on_click=st.logout,
+            use_container_width=True,
+        )
+
+    if supabase_activo():
+        st.caption("☁️ Datos guardados en la nube")
+    else:
+        st.caption(
+            "⚠️ Datos guardados solo en el servidor (pueden perderse "
+            "al reiniciar). Configura Supabase para guardarlos "
+            "en la nube."
         )
 
 
