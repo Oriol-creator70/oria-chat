@@ -164,6 +164,179 @@ def verificar_codigo_login(email, codigo):
         return None, mensaje
 
 
+def _traducir_error_auth(mensaje):
+    """Traduce los mensajes de error más habituales de Supabase Auth."""
+
+    m = mensaje.lower()
+
+    if "already registered" in m or "already exists" in m:
+        return "Ya existe una cuenta con ese correo. Prueba a iniciar sesión."
+    if "invalid login credentials" in m:
+        return "Correo o contraseña incorrectos."
+    if "email not confirmed" in m:
+        return "Todavía no has confirmado tu correo. Revisa tu bandeja de entrada."
+    if "password" in m and ("6 char" in m or "at least" in m or "short" in m):
+        return "La contraseña debe tener al menos 6 caracteres."
+    if "expired" in m or "invalid" in m and "token" in m:
+        return "El código no es válido o ha caducado. Pide uno nuevo."
+    if "rate limit" in m or "429" in m:
+        return "Has hecho demasiados intentos seguidos. Espera un minuto."
+
+    return mensaje
+
+
+def registrar_usuario(email, password):
+    """Crea la cuenta y dispara el correo de confirmación de Supabase.
+    Devuelve (ok, error)."""
+
+    cliente = obtener_cliente_supabase_auth()
+
+    if not cliente:
+        return False, "El registro no está configurado."
+
+    try:
+        resultado = cliente.auth.sign_up({"email": email, "password": password})
+
+        usuario = getattr(resultado, "user", None)
+        identidades = getattr(usuario, "identities", None) if usuario else None
+
+        # Supabase, por seguridad, no siempre avisa si el correo ya
+        # existía: cuando pasa esto, devuelve un usuario sin
+        # identidades nuevas asociadas.
+        if usuario is not None and identidades == []:
+            return False, (
+                "Ya existe una cuenta con ese correo. Prueba a iniciar "
+                "sesión o a recuperar tu contraseña."
+            )
+
+        return True, None
+
+    except Exception as e:
+        return False, _traducir_error_auth(str(e))
+
+
+def reenviar_confirmacion(email):
+    """Vuelve a mandar el correo de confirmación de la cuenta."""
+
+    cliente = obtener_cliente_supabase_auth()
+
+    if not cliente:
+        return False, "No configurado."
+
+    try:
+        cliente.auth.resend({"type": "signup", "email": email})
+        return True, None
+    except Exception as e:
+        return False, _traducir_error_auth(str(e))
+
+
+def iniciar_sesion_password(email, password):
+    """Entra con correo + contraseña. Devuelve (email, error)."""
+
+    cliente = obtener_cliente_supabase_auth()
+
+    if not cliente:
+        return None, "El login no está configurado."
+
+    try:
+        resultado = cliente.auth.sign_in_with_password(
+            {"email": email, "password": password}
+        )
+
+        usuario = getattr(resultado, "user", None)
+        email_confirmado = getattr(usuario, "email", None) if usuario else None
+
+        if email_confirmado:
+            return email_confirmado.strip().lower(), None
+
+        return None, "No se ha podido iniciar sesión."
+
+    except Exception as e:
+        return None, _traducir_error_auth(str(e))
+
+
+def solicitar_recuperacion(email):
+    """Manda el código para restablecer la contraseña."""
+
+    cliente = obtener_cliente_supabase_auth()
+
+    if not cliente:
+        return False, "No configurado."
+
+    try:
+        cliente.auth.reset_password_email(email)
+        return True, None
+    except Exception as e:
+        return False, _traducir_error_auth(str(e))
+
+
+def verificar_codigo_recuperacion(email, codigo):
+    """Comprueba el código de recuperación. Deja la sesión abierta en
+    el cliente para poder cambiar la contraseña justo después."""
+
+    cliente = obtener_cliente_supabase_auth()
+
+    if not cliente:
+        return None, "No configurado."
+
+    try:
+        resultado = cliente.auth.verify_otp(
+            {"email": email, "token": codigo.strip(), "type": "recovery"}
+        )
+
+        usuario = getattr(resultado, "user", None)
+        email_confirmado = getattr(usuario, "email", None) if usuario else None
+
+        if email_confirmado:
+            return email_confirmado.strip().lower(), None
+
+        return None, "Código incorrecto."
+
+    except Exception as e:
+        return None, _traducir_error_auth(str(e))
+
+
+def guardar_password_nueva(password_nueva):
+    """Cambia la contraseña usando la sesión de recuperación activa."""
+
+    cliente = obtener_cliente_supabase_auth()
+
+    if not cliente:
+        return False, "No configurado."
+
+    try:
+        cliente.auth.update_user({"password": password_nueva})
+        return True, None
+    except Exception as e:
+        return False, _traducir_error_auth(str(e))
+
+
+def borrar_cuenta_usuario(usuario_id):
+    """Borra los datos guardados (chats y memoria) de este usuario,
+    en la nube y localmente. La cuenta de acceso en sí (el correo
+    registrado en Supabase Auth) no se borra desde aquí."""
+
+    url, key = _config_supabase()
+
+    if url and key:
+        try:
+            requests.delete(
+                f"{url}/rest/v1/{TABLA_SUPABASE}",
+                headers=_headers_supabase(key),
+                params={"email": f"eq.{usuario_id}"},
+                timeout=20,
+            )
+        except Exception:
+            pass
+
+    try:
+        ruta = _ruta_datos_usuario(usuario_id)
+        if os.path.exists(ruta):
+            os.remove(ruta)
+    except Exception:
+        pass
+
+
 def obtener_uid():
     """Modo invitado (solo si el login con Google aún no está
     configurado): da a cada visitante un identificador propio,
@@ -1392,9 +1565,53 @@ st.markdown(
 LOGO_HTML = """<div class="oria-brand"><svg width="64" height="64" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg"><circle cx="28" cy="28" r="25" fill="none" stroke="#2B2B31" stroke-width="2.5"/><circle cx="28" cy="28" r="9" fill="#2B2B31"/><circle cx="45" cy="13" r="3.5" fill="#2B2B31"/></svg><div class="oria-brand-name">ORIA</div></div>"""
 
 
+TEXTO_POLITICA_PRIVACIDAD = """
+### Política de privacidad de ORIA
+
+*Última actualización: septiembre de 2026. Este texto es un modelo
+orientativo redactado para este proyecto personal y no sustituye el
+asesoramiento de un profesional legal.*
+
+**Quién trata tus datos.** ORIA es un proyecto personal, no una
+empresa. La persona que ha desplegado esta ORIA es responsable de
+los datos que se guardan.
+
+**Qué datos se guardan.** Tu correo electrónico (para identificar tu
+cuenta), el historial de tus conversaciones con ORIA, cualquier
+imagen o documento PDF que adjuntes mientras hablas con ella, y las
+notas que le pidas que recuerde ("Memoria de ORIA").
+
+**Para qué se usan.** Únicamente para que ORIA pueda responderte y
+para que tu historial esté disponible la próxima vez que entres,
+desde cualquier dispositivo.
+
+**Con quién se comparten.** Tus mensajes se envían a Groq (para
+generar las respuestas de texto, voz e imágenes) y, si inicias
+sesión por correo, a Supabase (donde se guarda tu cuenta y tu
+historial). Ningún dato se vende ni se usa con fines publicitarios.
+
+**Cuánto tiempo se guardan.** Hasta que borres una conversación
+concreta o elimines tu cuenta desde la barra lateral.
+
+**Tus derechos.** Puedes borrar tus conversaciones una a una, o
+eliminar toda tu cuenta y tus datos en cualquier momento desde
+**Cuenta → Eliminar mi cuenta y mis datos**, en la barra lateral.
+"""
+
+TEXTO_POLITICA_COOKIES = """
+### Política de cookies de ORIA
+
+ORIA usa únicamente las cookies técnicas necesarias para mantener tu
+sesión iniciada mientras usas la aplicación (por ejemplo, para
+recordar que ya iniciaste sesión sin pedírtelo en cada mensaje). No
+se usan cookies de publicidad ni de seguimiento entre otras webs.
+"""
+
+
 def mostrar_pantalla_login():
-    """Pantalla de acceso: logo + correo (código de un solo uso) y,
-    si está configurado, entrar con Google."""
+    """Pantalla de acceso: logo, pestañas de Iniciar sesión / Crear
+    cuenta (correo + contraseña con Supabase) y, si está configurado,
+    entrar con Google."""
 
     st.markdown("<br><br>", unsafe_allow_html=True)
 
@@ -1411,83 +1628,28 @@ def mostrar_pantalla_login():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        correo_por_codigo_disponible = bool(obtener_cliente_supabase_auth())
+        correo_disponible = bool(obtener_cliente_supabase_auth())
+        pantalla = st.session_state.get("pantalla_login", "login")
 
         # ------------------------------------------------------
-        # PASO 1: pedir el correo y mandar el código
+        # RECUPERAR CONTRASEÑA (tiene su propio flujo, aparte de
+        # las pestañas)
         # ------------------------------------------------------
 
-        if correo_por_codigo_disponible and not st.session_state.get(
-            "login_correo_pendiente"
-        ):
+        if correo_disponible and pantalla.startswith("recuperar"):
+            _mostrar_recuperacion_password(pantalla)
 
-            with st.form("form_login_correo", clear_on_submit=False):
+        elif correo_disponible:
 
-                correo_escrito = st.text_input(
-                    "Correo electrónico",
-                    placeholder="tunombre@correo.com",
-                )
+            tab_login, tab_registro = st.tabs(
+                ["Iniciar sesión", "Crear cuenta"]
+            )
 
-                enviar = st.form_submit_button(
-                    "Continuar", type="primary", use_container_width=True
-                )
+            with tab_login:
+                _mostrar_form_login()
 
-            if enviar:
-
-                correo_limpio = correo_escrito.strip().lower()
-
-                if "@" not in correo_limpio or "." not in correo_limpio:
-                    st.error("Escribe un correo electrónico válido.")
-                else:
-                    with st.spinner("Enviando el código..."):
-                        ok, error = enviar_codigo_login(correo_limpio)
-
-                    if ok:
-                        st.session_state.login_correo_pendiente = correo_limpio
-                        st.rerun()
-                    else:
-                        st.error(f"No se ha podido enviar el código: {error}")
-
-        # ------------------------------------------------------
-        # PASO 2: verificar el código de 6 dígitos
-        # ------------------------------------------------------
-
-        elif correo_por_codigo_disponible:
-
-            correo_pendiente = st.session_state.login_correo_pendiente
-
-            st.success(f"Te hemos enviado un código a **{correo_pendiente}**.")
-
-            with st.form("form_login_codigo", clear_on_submit=False):
-
-                codigo_escrito = st.text_input(
-                    "Código de 6 dígitos",
-                    placeholder="123456",
-                    max_chars=6,
-                )
-
-                verificar = st.form_submit_button(
-                    "Verificar código", type="primary", use_container_width=True
-                )
-
-            if verificar:
-
-                with st.spinner("Comprobando..."):
-                    email_confirmado, error = verificar_codigo_login(
-                        correo_pendiente, codigo_escrito
-                    )
-
-                if email_confirmado:
-                    st.session_state.email_login_verificado = email_confirmado
-                    st.session_state.metodo_login = "email"
-                    del st.session_state["login_correo_pendiente"]
-                    st.rerun()
-                else:
-                    st.error(error or "Código incorrecto.")
-
-            if st.button("Usar otro correo", use_container_width=True):
-                del st.session_state["login_correo_pendiente"]
-                st.rerun()
+            with tab_registro:
+                _mostrar_form_registro()
 
         elif not login_configurado():
             st.info(
@@ -1499,11 +1661,9 @@ def mostrar_pantalla_login():
         # GOOGLE
         # ------------------------------------------------------
 
-        if login_configurado() and not st.session_state.get(
-            "login_correo_pendiente"
-        ):
+        if login_configurado() and pantalla == "login":
 
-            if correo_por_codigo_disponible:
+            if correo_disponible:
                 st.markdown(
                     '<p style="text-align:center;color:#999;margin:14px 0;">o</p>',
                     unsafe_allow_html=True,
@@ -1521,6 +1681,198 @@ def mostrar_pantalla_login():
         )
 
 
+def _mostrar_form_login():
+
+    with st.form("form_login", clear_on_submit=False):
+
+        email = st.text_input("Correo electrónico", key="li_email")
+        password = st.text_input(
+            "Contraseña", type="password", key="li_password"
+        )
+
+        entrar = st.form_submit_button(
+            "Entrar", type="primary", use_container_width=True
+        )
+
+    if entrar:
+
+        email = email.strip().lower()
+
+        if not email or not password:
+            st.error("Escribe tu correo y tu contraseña.")
+        else:
+            with st.spinner("Comprobando..."):
+                email_ok, error = iniciar_sesion_password(email, password)
+
+            if email_ok:
+                st.session_state.email_login_verificado = email_ok
+                st.session_state.metodo_login = "email"
+                st.rerun()
+            else:
+                st.error(error)
+
+                if error and "confirmado" in error:
+                    if st.button("Reenviar correo de confirmación"):
+                        reenviar_confirmacion(email)
+                        st.success("Correo reenviado. Revisa tu bandeja.")
+
+    if st.button("¿Has olvidado tu contraseña?", use_container_width=True):
+        st.session_state.pantalla_login = "recuperar_pedir"
+        st.rerun()
+
+
+def _mostrar_form_registro():
+
+    if st.session_state.get("registro_hecho"):
+        st.success(
+            f"Te hemos enviado un correo de confirmación a "
+            f"**{st.session_state.registro_hecho}**. Ábrelo y confirma "
+            "tu cuenta, y después inicia sesión en la otra pestaña."
+        )
+        if st.button("Volver", key="volver_tras_registro"):
+            del st.session_state["registro_hecho"]
+            st.rerun()
+        return
+
+    with st.form("form_registro", clear_on_submit=False):
+
+        email = st.text_input("Correo electrónico", key="re_email")
+        password = st.text_input(
+            "Contraseña", type="password", key="re_password",
+            help="Al menos 6 caracteres.",
+        )
+        password2 = st.text_input(
+            "Repite la contraseña", type="password", key="re_password2"
+        )
+
+        with st.expander("Política de privacidad y cookies"):
+            st.markdown(TEXTO_POLITICA_PRIVACIDAD)
+            st.markdown(TEXTO_POLITICA_COOKIES)
+
+        acepto = st.checkbox(
+            "He leído y acepto la política de privacidad y de cookies"
+        )
+
+        crear = st.form_submit_button(
+            "Crear cuenta", type="primary", use_container_width=True
+        )
+
+    if crear:
+
+        email = email.strip().lower()
+
+        if "@" not in email or "." not in email:
+            st.error("Escribe un correo electrónico válido.")
+        elif len(password) < 6:
+            st.error("La contraseña debe tener al menos 6 caracteres.")
+        elif password != password2:
+            st.error("Las dos contraseñas no coinciden.")
+        elif not acepto:
+            st.error(
+                "Tienes que aceptar la política de privacidad y "
+                "cookies para crear la cuenta."
+            )
+        else:
+            with st.spinner("Creando la cuenta..."):
+                ok, error = registrar_usuario(email, password)
+
+            if ok:
+                st.session_state.registro_hecho = email
+                st.rerun()
+            else:
+                st.error(error)
+
+
+def _mostrar_recuperacion_password(pantalla):
+
+    if pantalla == "recuperar_pedir":
+
+        with st.form("form_recuperar_pedir"):
+            email = st.text_input("Tu correo electrónico")
+            enviar = st.form_submit_button(
+                "Enviar código", type="primary", use_container_width=True
+            )
+
+        if enviar:
+            email = email.strip().lower()
+            with st.spinner("Enviando..."):
+                ok, error = solicitar_recuperacion(email)
+
+            if ok:
+                st.session_state.recuperar_email = email
+                st.session_state.pantalla_login = "recuperar_verificar"
+                st.rerun()
+            else:
+                st.error(error)
+
+    elif pantalla == "recuperar_verificar":
+
+        email = st.session_state.get("recuperar_email", "")
+        st.success(f"Te hemos enviado un código a **{email}**.")
+
+        with st.form("form_recuperar_verificar"):
+            codigo = st.text_input("Código de 6 dígitos", max_chars=6)
+            verificar = st.form_submit_button(
+                "Verificar código", type="primary", use_container_width=True
+            )
+
+        if verificar:
+            with st.spinner("Comprobando..."):
+                email_ok, error = verificar_codigo_recuperacion(email, codigo)
+
+            if email_ok:
+                st.session_state.pantalla_login = "recuperar_nueva"
+                st.rerun()
+            else:
+                st.error(error)
+
+    elif pantalla == "recuperar_nueva":
+
+        st.info("Escribe tu nueva contraseña.")
+
+        with st.form("form_recuperar_nueva"):
+            password = st.text_input(
+                "Nueva contraseña", type="password", help="Al menos 6 caracteres."
+            )
+            password2 = st.text_input("Repite la contraseña", type="password")
+            guardar = st.form_submit_button(
+                "Guardar nueva contraseña",
+                type="primary",
+                use_container_width=True,
+            )
+
+        if guardar:
+
+            if len(password) < 6:
+                st.error("La contraseña debe tener al menos 6 caracteres.")
+            elif password != password2:
+                st.error("Las dos contraseñas no coinciden.")
+            else:
+                with st.spinner("Guardando..."):
+                    ok, error = guardar_password_nueva(password)
+
+                if ok:
+                    st.session_state.email_login_verificado = (
+                        st.session_state.get("recuperar_email")
+                    )
+                    st.session_state.metodo_login = "email"
+                    for _clave in (
+                        "pantalla_login",
+                        "recuperar_email",
+                    ):
+                        st.session_state.pop(_clave, None)
+                    st.success("Contraseña actualizada. Entrando...")
+                    st.rerun()
+                else:
+                    st.error(error)
+
+    if st.button("Cancelar", use_container_width=True):
+        for _clave in ("pantalla_login", "recuperar_email"):
+            st.session_state.pop(_clave, None)
+        st.rerun()
+
+
+# Identidad del usuario (si el login está configurado y aún no ha
 # Identidad del usuario (si el login está configurado y aún no ha
 # entrado, aquí se muestra la pantalla de acceso y se detiene todo).
 _identidad = obtener_identidad()
@@ -1766,6 +2118,25 @@ with st.sidebar:
             on_click=_cerrar_sesion,
             use_container_width=True,
         )
+
+        with st.expander("⚠️ Eliminar mi cuenta y mis datos"):
+            st.caption(
+                "Borra todas tus conversaciones y tu memoria de forma "
+                "permanente. No se puede deshacer."
+            )
+            if st.checkbox(
+                "Sí, quiero eliminar todos mis datos",
+                key="confirmar_borrado",
+            ):
+                if st.button(
+                    "Eliminar definitivamente",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    borrar_cuenta_usuario(st.session_state.usuario_id)
+                    _cerrar_sesion()
+                    st.success("Tus datos se han eliminado.")
+                    st.rerun()
 
     if obtener_tavily_key():
         st.caption("🌐 Búsqueda web activa")
