@@ -418,6 +418,26 @@ def _ruta_datos_usuario(usuario_id):
     return os.path.join(CARPETA_USUARIOS, f"{nombre}.json")
 
 
+IDIOMA_POR_DEFECTO = "es"
+
+# Idiomas que puede elegir cada usuario para que ORIA le conteste
+# siempre en ese idioma (independientemente del idioma en el que
+# escriba la pregunta).
+IDIOMAS_DISPONIBLES = {
+    "es": "Español",
+    "en": "English",
+    "ca": "Català",
+    "fr": "Français",
+}
+
+NOMBRE_IDIOMA_PARA_PROMPT = {
+    "es": "español",
+    "en": "English",
+    "ca": "català",
+    "fr": "français",
+}
+
+
 def _cargar_local(usuario_id):
     ruta = _ruta_datos_usuario(usuario_id)
 
@@ -429,20 +449,21 @@ def _cargar_local(usuario_id):
                 if isinstance(datos, dict):
                     datos.setdefault("chats", {})
                     datos.setdefault("memoria", "")
+                    datos.setdefault("idioma", IDIOMA_POR_DEFECTO)
                     return datos
 
         except Exception:
             pass
 
-    return {"chats": {}, "memoria": ""}
+    return {"chats": {}, "memoria": "", "idioma": IDIOMA_POR_DEFECTO}
 
 
-def _guardar_local(usuario_id, chats, memoria):
+def _guardar_local(usuario_id, chats, memoria, idioma):
     ruta = _ruta_datos_usuario(usuario_id)
 
     with open(ruta, "w", encoding="utf-8") as f:
         json.dump(
-            {"chats": chats, "memoria": memoria},
+            {"chats": chats, "memoria": memoria, "idioma": idioma},
             f,
             ensure_ascii=False,
             indent=2,
@@ -450,9 +471,16 @@ def _guardar_local(usuario_id, chats, memoria):
 
 
 def cargar_datos_usuario(usuario_id):
-    """Carga chats y memoria del usuario. Devuelve (datos, ok).
+    """Carga chats, memoria e idioma del usuario. Devuelve (datos, ok).
     Si falla la nube devuelve ok=False para NO seguir adelante con
-    datos vacíos (así no se sobrescribe lo que ya tenía guardado)."""
+    datos vacíos (así no se sobrescribe lo que ya tenía guardado).
+
+    Nota sobre "idioma": si la columna todavía no existe en la tabla
+    de Supabase (por ejemplo, porque la cuenta se creó antes de
+    añadir esta función), Supabase devuelve un error solo por pedir
+    esa columna en "select". Por eso, si el primer intento falla,
+    reintentamos sin pedir "idioma" y usamos el valor por defecto —
+    así una cuenta antigua no se queda sin poder entrar."""
 
     url, key = _config_supabase()
 
@@ -465,44 +493,69 @@ def cargar_datos_usuario(usuario_id):
             headers=_headers_supabase(key),
             params={
                 "email": f"eq.{usuario_id}",
-                "select": "chats,memoria",
+                "select": "chats,memoria,idioma",
             },
             timeout=20,
         )
 
         if respuesta.status_code != 200:
-            return None, False
+            # Puede que la columna "idioma" no exista todavía en la
+            # tabla. Reintentamos sin ella para no bloquear al usuario.
+            respuesta = requests.get(
+                f"{url}/rest/v1/{TABLA_SUPABASE}",
+                headers=_headers_supabase(key),
+                params={
+                    "email": f"eq.{usuario_id}",
+                    "select": "chats,memoria",
+                },
+                timeout=20,
+            )
+
+            if respuesta.status_code != 200:
+                return None, False
 
         filas = respuesta.json()
 
         if not filas:
-            return {"chats": {}, "memoria": ""}, True
+            return (
+                {"chats": {}, "memoria": "", "idioma": IDIOMA_POR_DEFECTO},
+                True,
+            )
 
         fila = filas[0]
         chats = fila.get("chats") or {}
         memoria = fila.get("memoria") or ""
+        idioma = fila.get("idioma") or IDIOMA_POR_DEFECTO
 
         if not isinstance(chats, dict):
             chats = {}
 
-        return {"chats": chats, "memoria": memoria}, True
+        return {"chats": chats, "memoria": memoria, "idioma": idioma}, True
 
     except Exception:
         return None, False
 
 
-def guardar_datos_usuario(usuario_id, chats, memoria):
-    """Guarda chats y memoria del usuario (nube si está configurada,
-    y si no, archivo local)."""
+def guardar_datos_usuario(usuario_id, chats, memoria, idioma=IDIOMA_POR_DEFECTO):
+    """Guarda chats, memoria e idioma del usuario (nube si está
+    configurada, y si no, archivo local)."""
 
     url, key = _config_supabase()
 
     if not (url and key):
         try:
-            _guardar_local(usuario_id, chats, memoria)
+            _guardar_local(usuario_id, chats, memoria, idioma)
         except Exception as e:
             st.error(f"Error al guardar tus datos: {e}")
         return
+
+    datos_a_guardar = {
+        "email": usuario_id,
+        "chats": chats,
+        "memoria": memoria,
+        "idioma": idioma,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
     try:
         respuesta = requests.post(
@@ -511,14 +564,26 @@ def guardar_datos_usuario(usuario_id, chats, memoria):
                 key,
                 {"Prefer": "resolution=merge-duplicates,return=minimal"},
             ),
-            json={
-                "email": usuario_id,
-                "chats": chats,
-                "memoria": memoria,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            },
+            json=datos_a_guardar,
             timeout=20,
         )
+
+        if respuesta.status_code not in (200, 201, 204):
+            # Si el fallo es porque la columna "idioma" no existe
+            # aún en Supabase, reintentamos sin ella para no perder
+            # el resto de los datos del usuario.
+            datos_sin_idioma = dict(datos_a_guardar)
+            datos_sin_idioma.pop("idioma", None)
+
+            respuesta = requests.post(
+                f"{url}/rest/v1/{TABLA_SUPABASE}",
+                headers=_headers_supabase(
+                    key,
+                    {"Prefer": "resolution=merge-duplicates,return=minimal"},
+                ),
+                json=datos_sin_idioma,
+                timeout=20,
+            )
 
         if respuesta.status_code not in (200, 201, 204):
             st.error(
@@ -981,6 +1046,7 @@ def obtener_respuesta_ia_stream(
     memoria_texto="",
     contexto_web="",
     web_fallida=False,
+    idioma=IDIOMA_POR_DEFECTO,
 ):
     """
     Envía la conversación a Groq y devuelve la respuesta
@@ -1027,6 +1093,10 @@ def obtener_respuesta_ia_stream(
     # System prompt (incluye memoria si existe)
     # --------------------------------------------------------
 
+    nombre_idioma = NOMBRE_IDIOMA_PARA_PROMPT.get(
+        idioma, NOMBRE_IDIOMA_PARA_PROMPT[IDIOMA_POR_DEFECTO]
+    )
+
     instrucciones_sistema = (
         "Eres ORIA, una asistente virtual inteligente, "
         "rápida, natural, amable y precisa. "
@@ -1038,8 +1108,11 @@ def obtener_respuesta_ia_stream(
         "lo pidan. "
         f"La fecha actual es {fecha_hoy_str} y la hora en España "
         f"son las {hora_hoy_str}. "
-        "Responde siempre en español, salvo que el usuario "
-        "pida expresamente otro idioma. "
+        f"El usuario ha elegido {nombre_idioma} como idioma de la "
+        f"aplicación: responde SIEMPRE en {nombre_idioma}, escriba el "
+        "usuario en el idioma que escriba, salvo que te pida "
+        "expresamente que le respondas en otro idioma distinto (en "
+        "ese caso, sigue esa petición solo para esa respuesta). "
         "Explica las cosas de forma clara y útil. "
         "Nunca inventes marcadores, resultados, noticias, horarios "
         "ni precios: solo puedes darlos si aparecen en los "
@@ -2186,18 +2259,24 @@ if st.session_state.get("usuario_id") != _identidad["id"]:
     st.session_state.es_invitado = _identidad["invitado"]
     st.session_state.chats = _datos_usuario["chats"]
     st.session_state.memoria = _datos_usuario["memoria"]
+    st.session_state.idioma = _datos_usuario.get("idioma", IDIOMA_POR_DEFECTO)
     st.session_state.current_chat_id = None
 
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 
+if "idioma" not in st.session_state:
+    st.session_state.idioma = IDIOMA_POR_DEFECTO
+
 
 def guardar_todo():
-    """Guarda las conversaciones y la memoria del usuario actual."""
+    """Guarda las conversaciones, la memoria y el idioma del usuario
+    actual."""
     guardar_datos_usuario(
         st.session_state.usuario_id,
         st.session_state.chats,
         st.session_state.memoria,
+        st.session_state.idioma,
     )
 
 
@@ -2230,9 +2309,42 @@ def _mostrar_ajustes():
     lateral se queda solo con lo esencial (como en Claude) y esto
     se abre aparte, cuando de verdad se necesita."""
 
-    tab_memoria, tab_cuenta, tab_info = st.tabs(
-        ["🧠 Memoria", "👤 Cuenta", "ℹ️ Estado"]
+    tab_idioma, tab_memoria, tab_cuenta, tab_info = st.tabs(
+        ["🌐 Idioma", "🧠 Memoria", "👤 Cuenta", "ℹ️ Estado"]
     )
+
+    # --------------------------------------------
+    # IDIOMA DE ORIA
+    # --------------------------------------------
+
+    with tab_idioma:
+
+        st.caption(
+            "Elige en qué idioma quieres que te responda ORIA. Puedes "
+            "escribirle en cualquier idioma: ella siempre te "
+            "contestará en el que elijas aquí."
+        )
+
+        codigos = list(IDIOMAS_DISPONIBLES.keys())
+        idioma_actual = st.session_state.get("idioma", IDIOMA_POR_DEFECTO)
+
+        indice_actual = (
+            codigos.index(idioma_actual) if idioma_actual in codigos else 0
+        )
+
+        nuevo_idioma = st.selectbox(
+            "Idioma de ORIA",
+            options=codigos,
+            index=indice_actual,
+            format_func=lambda c: IDIOMAS_DISPONIBLES.get(c, c),
+            label_visibility="collapsed",
+        )
+
+        if nuevo_idioma != idioma_actual:
+            st.session_state.idioma = nuevo_idioma
+            guardar_todo()
+            st.success(f"Idioma cambiado a {IDIOMAS_DISPONIBLES[nuevo_idioma]}.")
+            st.rerun()
 
     # --------------------------------------------
     # MEMORIA DE ORIA
@@ -2850,6 +2962,7 @@ if entrada or texto_por_voz:
                         prompt_aumentado,
                         historial_mensajes=None,
                         memoria_texto=st.session_state.memoria,
+                        idioma=st.session_state.idioma,
                     )
                 )
 
@@ -2879,6 +2992,7 @@ if entrada or texto_por_voz:
                     historial_mensajes=None,
                     imagen_data_uri=data_uri,
                     memoria_texto=st.session_state.memoria,
+                    idioma=st.session_state.idioma,
                 )
             )
 
@@ -2939,6 +3053,7 @@ if entrada or texto_por_voz:
                     contexto_web=formatear_contexto_web(resultados_web)
                     if resultados_web else "",
                     web_fallida=web_fallida,
+                    idioma=st.session_state.idioma,
                 )
             )
 
