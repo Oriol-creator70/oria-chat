@@ -1432,11 +1432,35 @@ que sigas viendo el aviso "Manage app" abajo a la derecha — eso lo
 pone la plataforma por fuera de la app y solo tú lo ves, no tus
 amigos ni familiares. */
 #MainMenu,
-header[data-testid="stHeader"],
 [data-testid="stToolbar"],
 footer {
     visibility: hidden;
     height: 0;
+}
+
+/* La cabecera en sí la dejamos "existir" (transparente, sin borde)
+en lugar de ocultarla del todo: dentro de ella vive el botón que
+abre la barra lateral en el móvil (flecha »). Si se oculta toda la
+cabecera, ese botón desaparece con ella y en el móvil no hay forma
+de abrir las conversaciones ni la cuenta — por eso solo la
+"vaciamos" visualmente. */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* El botón de abrir/cerrar la barra lateral tiene que verse bien y
+ser fácil de tocar en el móvil (el nombre interno de este elemento
+ha cambiado entre versiones de Streamlit, por eso cubrimos los dos). */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 1000 !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid #E2E2DD !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
 }
 
 [data-testid="stChatMessageAvatarUser"],
