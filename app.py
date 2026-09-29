@@ -15,6 +15,9 @@ import streamlit.components.v1 as components
 from pypdf import PdfReader
 from pptx import Presentation
 from pptx.dml.color import RGBColor
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.shapes import MSO_SHAPE
 
 
 # ============================================================
@@ -1441,57 +1444,177 @@ def _nombre_archivo_seguro(texto, por_defecto="presentacion"):
     return limpio[:80] if limpio else por_defecto
 
 
-def crear_pptx(contenido, ruta):
-    """Construye un archivo .pptx a partir del contenido generado
-    (título, subtítulo y diapositivas) y lo guarda en `ruta`."""
+# Paleta de colores propia de ORIA para las presentaciones generadas.
+# Se usa un diseño hecho a mano (rectángulos + cajas de texto sobre una
+# diapositiva en blanco) en vez de las plantillas por defecto de
+# PowerPoint, que se ven muy genéricas.
+_PPTX_COLOR_FONDO_OSCURO = RGBColor(0x1B, 0x1B, 0x2A)
+_PPTX_COLOR_ACENTO = RGBColor(0x6C, 0x5C, 0xE7)
+_PPTX_COLOR_TEXTO_OSCURO = RGBColor(0x2B, 0x2B, 0x31)
+_PPTX_COLOR_TEXTO_CLARO = RGBColor(0xFF, 0xFF, 0xFF)
+_PPTX_COLOR_TEXTO_SECUNDARIO = RGBColor(0x8A, 0x8A, 0x96)
+_PPTX_COLOR_SUBTITULO_CLARO = RGBColor(0xC9, 0xC9, 0xDC)
+_PPTX_COLOR_LINEA = RGBColor(0xE3, 0xE3, 0xE8)
+_PPTX_FUENTE = "Calibri"
 
-    COLOR_ORIA = RGBColor(0x2B, 0x2B, 0x31)
+
+def _pptx_rectangulo(slide, left, top, width, height, color):
+    """Añade un rectángulo sólido sin borde ni sombra (bloque de color
+    para fondos, barras de acento y líneas divisorias)."""
+
+    forma = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, height)
+    forma.fill.solid()
+    forma.fill.fore_color.rgb = color
+    forma.line.fill.background()
+    forma.shadow.inherit = False
+    return forma
+
+
+def _pptx_caja_texto(slide, left, top, width, height, anclaje_vertical=None):
+    """Añade una caja de texto con ajuste de línea activado."""
+
+    caja = slide.shapes.add_textbox(left, top, width, height)
+    marco = caja.text_frame
+    marco.word_wrap = True
+    if anclaje_vertical is not None:
+        marco.vertical_anchor = anclaje_vertical
+    return marco
+
+
+def crear_pptx(contenido, ruta):
+    """Construye un archivo .pptx con un diseño propio (portada con
+    color de fondo, cabeceras de acento, viñetas de marca, numeración
+    y pie de página) a partir del contenido generado, y lo guarda en
+    `ruta`."""
 
     prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    ancho = prs.slide_width
+    alto = prs.slide_height
+
+    layout_en_blanco = prs.slide_layouts[6]
 
     # --------------------------------------------
-    # Diapositiva de título
+    # Diapositiva de portada
     # --------------------------------------------
 
-    layout_titulo = prs.slide_layouts[0]
-    slide = prs.slides.add_slide(layout_titulo)
+    slide = prs.slides.add_slide(layout_en_blanco)
 
-    slide.shapes.title.text = str(contenido.get("titulo", ""))
-    slide.shapes.title.text_frame.paragraphs[0].font.color.rgb = COLOR_ORIA
+    _pptx_rectangulo(slide, 0, 0, ancho, alto, _PPTX_COLOR_FONDO_OSCURO)
+    _pptx_rectangulo(slide, 0, 0, Inches(0.18), alto, _PPTX_COLOR_ACENTO)
 
-    if len(slide.placeholders) > 1 and contenido.get("subtitulo"):
-        slide.placeholders[1].text = str(contenido["subtitulo"])
+    titulo_txt = str(contenido.get("titulo", ""))
+    tamano_titulo = Pt(44) if len(titulo_txt) <= 40 else Pt(32)
+
+    marco_titulo = _pptx_caja_texto(
+        slide, Inches(1), Inches(2.6), ancho - Inches(2), Inches(1.8)
+    )
+    p = marco_titulo.paragraphs[0]
+    p.text = titulo_txt
+    p.font.size = tamano_titulo
+    p.font.bold = True
+    p.font.name = _PPTX_FUENTE
+    p.font.color.rgb = _PPTX_COLOR_TEXTO_CLARO
+
+    _pptx_rectangulo(slide, Inches(1), Inches(4.05), Inches(1.1), Pt(4), _PPTX_COLOR_ACENTO)
+
+    if contenido.get("subtitulo"):
+        marco_sub = _pptx_caja_texto(
+            slide, Inches(1), Inches(4.3), ancho - Inches(2), Inches(1)
+        )
+        ps = marco_sub.paragraphs[0]
+        ps.text = str(contenido["subtitulo"])
+        ps.font.size = Pt(20)
+        ps.font.name = _PPTX_FUENTE
+        ps.font.color.rgb = _PPTX_COLOR_SUBTITULO_CLARO
 
     # --------------------------------------------
     # Diapositivas de contenido
     # --------------------------------------------
 
-    layout_contenido = prs.slide_layouts[1]
+    diapositivas = contenido.get("diapositivas", [])
+    total = len(diapositivas)
 
-    for diapo in contenido.get("diapositivas", []):
+    for numero, diapo in enumerate(diapositivas, start=1):
 
-        slide = prs.slides.add_slide(layout_contenido)
-        slide.shapes.title.text = str(diapo.get("titulo", ""))
-        slide.shapes.title.text_frame.paragraphs[0].font.color.rgb = COLOR_ORIA
+        slide = prs.slides.add_slide(layout_en_blanco)
 
-        marcador_cuerpo = None
-        for ph in slide.placeholders:
-            if ph.placeholder_format.idx != 0:
-                marcador_cuerpo = ph
-                break
+        # Cabecera oscura con barra de acento.
+        _pptx_rectangulo(slide, 0, 0, ancho, Inches(1.15), _PPTX_COLOR_FONDO_OSCURO)
+        _pptx_rectangulo(slide, 0, 0, Inches(0.18), Inches(1.15), _PPTX_COLOR_ACENTO)
 
-        if marcador_cuerpo is None:
-            continue
+        titulo_diapo = str(diapo.get("titulo", ""))
+        tamano_titulo_diapo = Pt(26) if len(titulo_diapo) <= 45 else Pt(21)
 
-        cuerpo = marcador_cuerpo.text_frame
-        cuerpo.clear()
+        marco_t = _pptx_caja_texto(
+            slide,
+            Inches(0.7),
+            Inches(0.15),
+            ancho - Inches(2.6),
+            Inches(0.9),
+            anclaje_vertical=MSO_ANCHOR.MIDDLE,
+        )
+        pt_ = marco_t.paragraphs[0]
+        pt_.text = titulo_diapo
+        pt_.font.size = tamano_titulo_diapo
+        pt_.font.bold = True
+        pt_.font.name = _PPTX_FUENTE
+        pt_.font.color.rgb = _PPTX_COLOR_TEXTO_CLARO
 
+        # Numeración arriba a la derecha.
+        marco_num = _pptx_caja_texto(
+            slide,
+            ancho - Inches(1.8),
+            Inches(0.15),
+            Inches(1.3),
+            Inches(0.9),
+            anclaje_vertical=MSO_ANCHOR.MIDDLE,
+        )
+        pn = marco_num.paragraphs[0]
+        pn.text = f"{numero:02d} / {total:02d}"
+        pn.alignment = PP_ALIGN.RIGHT
+        pn.font.size = Pt(13)
+        pn.font.name = _PPTX_FUENTE
+        pn.font.color.rgb = _PPTX_COLOR_SUBTITULO_CLARO
+
+        # Cuerpo con los puntos, con viñeta coloreada en el acento.
         puntos = diapo.get("puntos") or []
+        tamano_puntos = Pt(19) if len(puntos) <= 5 else Pt(16)
+
+        marco_cuerpo = _pptx_caja_texto(
+            slide, Inches(0.9), Inches(1.7), ancho - Inches(1.8), alto - Inches(2.5)
+        )
 
         for indice, punto in enumerate(puntos):
-            parrafo = cuerpo.paragraphs[0] if indice == 0 else cuerpo.add_paragraph()
-            parrafo.text = str(punto)
-            parrafo.level = 0
+            parrafo = marco_cuerpo.paragraphs[0] if indice == 0 else marco_cuerpo.add_paragraph()
+            parrafo.space_after = Pt(14)
+
+            marca = parrafo.add_run()
+            marca.text = "●  "
+            marca.font.size = tamano_puntos
+            marca.font.name = _PPTX_FUENTE
+            marca.font.color.rgb = _PPTX_COLOR_ACENTO
+
+            texto_run = parrafo.add_run()
+            texto_run.text = str(punto)
+            texto_run.font.size = tamano_puntos
+            texto_run.font.name = _PPTX_FUENTE
+            texto_run.font.color.rgb = _PPTX_COLOR_TEXTO_OSCURO
+
+        # Línea divisoria y marca de pie de página.
+        _pptx_rectangulo(
+            slide, Inches(0.7), alto - Inches(0.7), ancho - Inches(1.4), Pt(1), _PPTX_COLOR_LINEA
+        )
+        marco_pie = _pptx_caja_texto(
+            slide, Inches(0.7), alto - Inches(0.6), Inches(3), Inches(0.4)
+        )
+        pp_ = marco_pie.paragraphs[0]
+        pp_.text = "ORIA"
+        pp_.font.size = Pt(11)
+        pp_.font.bold = True
+        pp_.font.name = _PPTX_FUENTE
+        pp_.font.color.rgb = _PPTX_COLOR_TEXTO_SECUNDARIO
 
     prs.save(ruta)
 
