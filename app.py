@@ -437,6 +437,421 @@ NOMBRE_IDIOMA_PARA_PROMPT = {
     "fr": "français",
 }
 
+# Idioma que usa el sintetizador de voz del navegador (botón
+# "Escuchar") para pronunciar bien según el idioma elegido.
+CODIGO_VOZ_NAVEGADOR = {
+    "es": "es-ES",
+    "en": "en-US",
+    "ca": "ca-ES",
+    "fr": "fr-FR",
+}
+
+# ------------------------------------------------------------
+# Textos de la interfaz (todo lo que NO es la respuesta de la IA:
+# botones, pestañas, avisos...) en los idiomas disponibles. La
+# pantalla de inicio de sesión se queda en español (todavía no hay
+# ninguna cuenta de la que leer el idioma elegido); en cuanto el
+# usuario entra, toda la interfaz pasa a hablar en su idioma.
+# ------------------------------------------------------------
+TEXTOS = {
+    "es": {
+        "tagline_bienvenida": "¿En qué te puedo ayudar hoy?",
+        "nueva_conversacion": "＋  Nueva conversación",
+        "conversacion_sin_titulo": "Nueva conversación",
+        "archivo_titulo": "Archivo: {nombre}",
+        "ajustes_titulo": "Ajustes",
+        "tab_idioma": "🌐 Idioma",
+        "tab_memoria": "🧠 Memoria",
+        "tab_cuenta": "👤 Cuenta",
+        "tab_estado": "ℹ️ Estado",
+        "idioma_caption": (
+            "Elige en qué idioma quieres que te responda ORIA. Puedes "
+            "escribirle en cualquier idioma: ella siempre te "
+            "contestará en el que elijas aquí."
+        ),
+        "idioma_cambiado": "Idioma cambiado a {idioma}.",
+        "memoria_caption": (
+            "Escribe aquí datos que quieras que ORIA recuerde siempre "
+            "(tu nombre, tus preferencias, tu contexto...). Se "
+            "incluirán en todas las conversaciones."
+        ),
+        "guardar_memoria": "Guardar memoria",
+        "memoria_guardada": "Memoria guardada.",
+        "cuenta_invitado": (
+            "👤 Modo invitado: el inicio de sesión aún no está "
+            "configurado."
+        ),
+        "cuenta_sesion_como": "Sesión iniciada como **{nombre}**.",
+        "cerrar_sesion": "Cerrar sesión",
+        "eliminar_cuenta_titulo": "⚠️ Eliminar mi cuenta y mis datos",
+        "eliminar_cuenta_caption": (
+            "Borra todas tus conversaciones y tu memoria de forma "
+            "permanente. No se puede deshacer."
+        ),
+        "eliminar_cuenta_checkbox": "Sí, quiero eliminar todos mis datos",
+        "eliminar_definitivamente": "Eliminar definitivamente",
+        "datos_eliminados": "Tus datos se han eliminado.",
+        "compartir_caption": (
+            "Comparte el enlace de esta página con quien quieras: "
+            "cada persona entra con su propia cuenta y tiene su "
+            "historial y memoria separados del tuyo. En el móvil "
+            "pueden usar 'Añadir a pantalla de inicio' para que "
+            "funcione como una app."
+        ),
+        "estado_web_activa": "🌐 Búsqueda web activa",
+        "estado_web_inactiva": "🌐 Búsqueda web sin configurar",
+        "estado_nube": "☁️ Datos guardados en la nube",
+        "estado_servidor": (
+            "⚠️ Datos guardados solo en el servidor (pueden perderse "
+            "al reiniciar). Configura Supabase para guardarlos en la "
+            "nube."
+        ),
+        "estado_calidad_imagen": (
+            "ORIA mejora automáticamente tu descripción antes de "
+            "generar una imagen. Se usa el generador gratuito y "
+            "anónimo de Pollinations.ai, que no requiere cuenta ni "
+            "pago, pero por eso incluye una pequeña marca de agua y "
+            "a veces algún error puntual bajo mucha demanda — es el "
+            "límite normal de una herramienta 100% gratuita."
+        ),
+        "toggle_imagen": "🎨 Imagen",
+        "toggle_voz": "🎤 Voz",
+        "toggle_web": "🌐 Web",
+        "grabar_pregunta": "Pulsa para grabar tu pregunta",
+        "transcribiendo_voz": "Transcribiendo tu voz...",
+        "chat_placeholder": "Pregunta a ORIA, o adjunta una imagen/PDF...",
+        "boton_escuchar": "🔊 Escuchar",
+        "boton_copiar": "📋 Copiar",
+        "boton_copiado": "✅ Copiado",
+        "fuentes": "🔎 Fuentes ({n})",
+        "imagen_no_disponible": "⚠️ *(La imagen generada ya no está disponible)*",
+        "resumen_pdf_defecto": "Resume este documento y destaca los puntos clave.",
+        "describe_imagen_defecto": "Describe esta imagen y explica qué ves con detalle.",
+        "error_transcribir_audio": "No se pudo transcribir el audio: {error}",
+        "error_generar_imagen": "No se pudo generar la imagen: {error}",
+        "buscando_web": "Buscando en la web...",
+        "puliendo_descripcion": "Puliendo la descripción...",
+        "generando_imagen": "Generando imagen...",
+        "no_pude_generar_imagen": "⚠️ No he podido generar la imagen: {error}",
+        "leyendo_pdf": "Leyendo el PDF...",
+        "no_pude_leer_pdf": "⚠️ No he podido leer el PDF: {error}",
+        "web_no_configurada": (
+            "🌐 La búsqueda web no está configurada todavía, así que "
+            "no puedo confirmar datos de última hora."
+        ),
+        "web_no_disponible": "🌐 No he podido consultar la web ahora mismo.",
+        "error_413": (
+            "⚠️ **La conversación se ha quedado demasiado larga para "
+            "el plan gratuito de Groq en este momento (demasiados "
+            "tokens por minuto).**\n\n"
+            "Prueba a pulsar '➕ Nueva conversación' para empezar de "
+            "cero, o espera un minuto y vuelve a intentarlo."
+        ),
+        "invitado": "Invitado",
+    },
+    "en": {
+        "tagline_bienvenida": "What can I help you with today?",
+        "nueva_conversacion": "＋  New chat",
+        "conversacion_sin_titulo": "New chat",
+        "archivo_titulo": "File: {nombre}",
+        "ajustes_titulo": "Settings",
+        "tab_idioma": "🌐 Language",
+        "tab_memoria": "🧠 Memory",
+        "tab_cuenta": "👤 Account",
+        "tab_estado": "ℹ️ Status",
+        "idioma_caption": (
+            "Choose the language you want ORIA to reply in. You can "
+            "write to it in any language: it will always answer in "
+            "the one you choose here."
+        ),
+        "idioma_cambiado": "Language changed to {idioma}.",
+        "memoria_caption": (
+            "Write here anything you want ORIA to always remember "
+            "(your name, your preferences, your context...). It will "
+            "be included in every conversation."
+        ),
+        "guardar_memoria": "Save memory",
+        "memoria_guardada": "Memory saved.",
+        "cuenta_invitado": (
+            "👤 Guest mode: sign-in isn't configured yet."
+        ),
+        "cuenta_sesion_como": "Signed in as **{nombre}**.",
+        "cerrar_sesion": "Sign out",
+        "eliminar_cuenta_titulo": "⚠️ Delete my account and data",
+        "eliminar_cuenta_caption": (
+            "Permanently deletes all your conversations and your "
+            "memory. This can't be undone."
+        ),
+        "eliminar_cuenta_checkbox": "Yes, I want to delete all my data",
+        "eliminar_definitivamente": "Delete permanently",
+        "datos_eliminados": "Your data has been deleted.",
+        "compartir_caption": (
+            "Share this page's link with anyone: each person signs "
+            "in with their own account and has their history and "
+            "memory kept separate from yours. On mobile they can use "
+            "'Add to home screen' so it works like an app."
+        ),
+        "estado_web_activa": "🌐 Web search active",
+        "estado_web_inactiva": "🌐 Web search not configured",
+        "estado_nube": "☁️ Data saved in the cloud",
+        "estado_servidor": (
+            "⚠️ Data saved only on the server (may be lost on "
+            "restart). Configure Supabase to save it to the cloud."
+        ),
+        "estado_calidad_imagen": (
+            "ORIA automatically improves your description before "
+            "generating an image. It uses Pollinations.ai's free, "
+            "anonymous generator, which needs no account or payment, "
+            "but that's also why it includes a small watermark and "
+            "occasionally an error under heavy demand — the normal "
+            "limit of a 100% free tool."
+        ),
+        "toggle_imagen": "🎨 Image",
+        "toggle_voz": "🎤 Voice",
+        "toggle_web": "🌐 Web",
+        "grabar_pregunta": "Tap to record your question",
+        "transcribiendo_voz": "Transcribing your voice...",
+        "chat_placeholder": "Ask ORIA, or attach an image/PDF...",
+        "boton_escuchar": "🔊 Listen",
+        "boton_copiar": "📋 Copy",
+        "boton_copiado": "✅ Copied",
+        "fuentes": "🔎 Sources ({n})",
+        "imagen_no_disponible": "⚠️ *(This generated image is no longer available)*",
+        "resumen_pdf_defecto": "Summarize this document and highlight the key points.",
+        "describe_imagen_defecto": "Describe this image and explain what you see in detail.",
+        "error_transcribir_audio": "Couldn't transcribe the audio: {error}",
+        "error_generar_imagen": "Couldn't generate the image: {error}",
+        "buscando_web": "Searching the web...",
+        "puliendo_descripcion": "Polishing the description...",
+        "generando_imagen": "Generating image...",
+        "no_pude_generar_imagen": "⚠️ I couldn't generate the image: {error}",
+        "leyendo_pdf": "Reading the PDF...",
+        "no_pude_leer_pdf": "⚠️ I couldn't read the PDF: {error}",
+        "web_no_configurada": (
+            "🌐 Web search isn't configured yet, so I can't confirm "
+            "up-to-the-minute data."
+        ),
+        "web_no_disponible": "🌐 I couldn't check the web right now.",
+        "error_413": (
+            "⚠️ **This conversation has gotten too long for Groq's "
+            "free plan right now (too many tokens per minute).**\n\n"
+            "Try tapping '➕ New chat' to start fresh, or wait a "
+            "minute and try again."
+        ),
+        "invitado": "Guest",
+    },
+    "ca": {
+        "tagline_bienvenida": "En què et puc ajudar avui?",
+        "nueva_conversacion": "＋  Nova conversa",
+        "conversacion_sin_titulo": "Nova conversa",
+        "archivo_titulo": "Fitxer: {nombre}",
+        "ajustes_titulo": "Ajustos",
+        "tab_idioma": "🌐 Idioma",
+        "tab_memoria": "🧠 Memòria",
+        "tab_cuenta": "👤 Compte",
+        "tab_estado": "ℹ️ Estat",
+        "idioma_caption": (
+            "Tria en quin idioma vols que et respongui ORIA. Li pots "
+            "escriure en qualsevol idioma: sempre et contestarà en "
+            "el que triïs aquí."
+        ),
+        "idioma_cambiado": "Idioma canviat a {idioma}.",
+        "memoria_caption": (
+            "Escriu aquí dades que vulguis que ORIA recordi sempre "
+            "(el teu nom, les teves preferències, el teu context...). "
+            "S'inclouran a totes les converses."
+        ),
+        "guardar_memoria": "Desar memòria",
+        "memoria_guardada": "Memòria desada.",
+        "cuenta_invitado": (
+            "👤 Mode convidat: l'inici de sessió encara no està "
+            "configurat."
+        ),
+        "cuenta_sesion_como": "Sessió iniciada com a **{nombre}**.",
+        "cerrar_sesion": "Tancar sessió",
+        "eliminar_cuenta_titulo": "⚠️ Eliminar el meu compte i les meves dades",
+        "eliminar_cuenta_caption": (
+            "Esborra totes les teves converses i la teva memòria de "
+            "forma permanent. No es pot desfer."
+        ),
+        "eliminar_cuenta_checkbox": "Sí, vull eliminar totes les meves dades",
+        "eliminar_definitivamente": "Eliminar definitivament",
+        "datos_eliminados": "Les teves dades s'han eliminat.",
+        "compartir_caption": (
+            "Comparteix l'enllaç d'aquesta pàgina amb qui vulguis: "
+            "cada persona entra amb el seu propi compte i té el seu "
+            "historial i memòria separats del teu. Al mòbil poden "
+            "usar 'Afegeix a la pantalla d'inici' perquè funcioni "
+            "com una app."
+        ),
+        "estado_web_activa": "🌐 Cerca web activa",
+        "estado_web_inactiva": "🌐 Cerca web sense configurar",
+        "estado_nube": "☁️ Dades desades al núvol",
+        "estado_servidor": (
+            "⚠️ Dades desades només al servidor (es poden perdre en "
+            "reiniciar). Configura Supabase per desar-les al núvol."
+        ),
+        "estado_calidad_imagen": (
+            "ORIA millora automàticament la teva descripció abans de "
+            "generar una imatge. S'utilitza el generador gratuït i "
+            "anònim de Pollinations.ai, que no requereix compte ni "
+            "pagament, però per això inclou una petita marca d'aigua "
+            "i de vegades algun error puntual sota molta demanda — "
+            "és el límit normal d'una eina 100% gratuïta."
+        ),
+        "toggle_imagen": "🎨 Imatge",
+        "toggle_voz": "🎤 Veu",
+        "toggle_web": "🌐 Web",
+        "grabar_pregunta": "Prem per gravar la teva pregunta",
+        "transcribiendo_voz": "Transcrivint la teva veu...",
+        "chat_placeholder": "Pregunta a l'ORIA, o adjunta una imatge/PDF...",
+        "boton_escuchar": "🔊 Escoltar",
+        "boton_copiar": "📋 Copiar",
+        "boton_copiado": "✅ Copiat",
+        "fuentes": "🔎 Fonts ({n})",
+        "imagen_no_disponible": "⚠️ *(La imatge generada ja no està disponible)*",
+        "resumen_pdf_defecto": "Resumeix aquest document i destaca'n els punts clau.",
+        "describe_imagen_defecto": "Descriu aquesta imatge i explica amb detall què hi veus.",
+        "error_transcribir_audio": "No s'ha pogut transcriure l'àudio: {error}",
+        "error_generar_imagen": "No s'ha pogut generar la imatge: {error}",
+        "buscando_web": "Cercant a la web...",
+        "puliendo_descripcion": "Polint la descripció...",
+        "generando_imagen": "Generant la imatge...",
+        "no_pude_generar_imagen": "⚠️ No he pogut generar la imatge: {error}",
+        "leyendo_pdf": "Llegint el PDF...",
+        "no_pude_leer_pdf": "⚠️ No he pogut llegir el PDF: {error}",
+        "web_no_configurada": (
+            "🌐 La cerca web encara no està configurada, així que no "
+            "puc confirmar dades de darrera hora."
+        ),
+        "web_no_disponible": "🌐 No he pogut consultar la web ara mateix.",
+        "error_413": (
+            "⚠️ **La conversa s'ha quedat massa llarga per al pla "
+            "gratuït de Groq en aquest moment (massa tokens per "
+            "minut).**\n\n"
+            "Prova de prémer '➕ Nova conversa' per començar de zero, "
+            "o espera un minut i torna-ho a provar."
+        ),
+        "invitado": "Convidat",
+    },
+    "fr": {
+        "tagline_bienvenida": "Comment puis-je t'aider aujourd'hui ?",
+        "nueva_conversacion": "＋  Nouvelle conversation",
+        "conversacion_sin_titulo": "Nouvelle conversation",
+        "archivo_titulo": "Fichier : {nombre}",
+        "ajustes_titulo": "Paramètres",
+        "tab_idioma": "🌐 Langue",
+        "tab_memoria": "🧠 Mémoire",
+        "tab_cuenta": "👤 Compte",
+        "tab_estado": "ℹ️ État",
+        "idioma_caption": (
+            "Choisis la langue dans laquelle tu veux qu'ORIA te "
+            "réponde. Tu peux lui écrire dans n'importe quelle "
+            "langue : elle te répondra toujours dans celle choisie "
+            "ici."
+        ),
+        "idioma_cambiado": "Langue changée en {idioma}.",
+        "memoria_caption": (
+            "Écris ici ce que tu veux qu'ORIA se rappelle toujours "
+            "(ton nom, tes préférences, ton contexte...). Ce sera "
+            "inclus dans toutes les conversations."
+        ),
+        "guardar_memoria": "Enregistrer la mémoire",
+        "memoria_guardada": "Mémoire enregistrée.",
+        "cuenta_invitado": (
+            "👤 Mode invité : la connexion n'est pas encore configurée."
+        ),
+        "cuenta_sesion_como": "Connecté en tant que **{nombre}**.",
+        "cerrar_sesion": "Se déconnecter",
+        "eliminar_cuenta_titulo": "⚠️ Supprimer mon compte et mes données",
+        "eliminar_cuenta_caption": (
+            "Supprime définitivement toutes tes conversations et ta "
+            "mémoire. Cette action est irréversible."
+        ),
+        "eliminar_cuenta_checkbox": "Oui, je veux supprimer toutes mes données",
+        "eliminar_definitivamente": "Supprimer définitivement",
+        "datos_eliminados": "Tes données ont été supprimées.",
+        "compartir_caption": (
+            "Partage le lien de cette page avec qui tu veux : chaque "
+            "personne se connecte avec son propre compte et garde "
+            "son historique et sa mémoire séparés des tiens. Sur "
+            "mobile, on peut utiliser 'Ajouter à l'écran d'accueil' "
+            "pour que ça fonctionne comme une appli."
+        ),
+        "estado_web_activa": "🌐 Recherche web active",
+        "estado_web_inactiva": "🌐 Recherche web non configurée",
+        "estado_nube": "☁️ Données enregistrées dans le cloud",
+        "estado_servidor": (
+            "⚠️ Données enregistrées seulement sur le serveur "
+            "(peuvent être perdues au redémarrage). Configure "
+            "Supabase pour les enregistrer dans le cloud."
+        ),
+        "estado_calidad_imagen": (
+            "ORIA améliore automatiquement ta description avant de "
+            "générer une image. Le générateur gratuit et anonyme de "
+            "Pollinations.ai est utilisé, sans compte ni paiement, "
+            "mais c'est aussi pour ça qu'il inclut un petit filigrane "
+            "et parfois une erreur ponctuelle en cas de forte "
+            "demande — la limite normale d'un outil 100% gratuit."
+        ),
+        "toggle_imagen": "🎨 Image",
+        "toggle_voz": "🎤 Voix",
+        "toggle_web": "🌐 Web",
+        "grabar_pregunta": "Appuie pour enregistrer ta question",
+        "transcribiendo_voz": "Transcription de ta voix...",
+        "chat_placeholder": "Demande à ORIA, ou joins une image/PDF...",
+        "boton_escuchar": "🔊 Écouter",
+        "boton_copiar": "📋 Copier",
+        "boton_copiado": "✅ Copié",
+        "fuentes": "🔎 Sources ({n})",
+        "imagen_no_disponible": "⚠️ *(Cette image générée n'est plus disponible)*",
+        "resumen_pdf_defecto": "Résume ce document et souligne les points clés.",
+        "describe_imagen_defecto": "Décris cette image et explique en détail ce que tu vois.",
+        "error_transcribir_audio": "Impossible de transcrire l'audio : {error}",
+        "error_generar_imagen": "Impossible de générer l'image : {error}",
+        "buscando_web": "Recherche sur le web...",
+        "puliendo_descripcion": "Amélioration de la description...",
+        "generando_imagen": "Génération de l'image...",
+        "no_pude_generar_imagen": "⚠️ Je n'ai pas pu générer l'image : {error}",
+        "leyendo_pdf": "Lecture du PDF...",
+        "no_pude_leer_pdf": "⚠️ Je n'ai pas pu lire le PDF : {error}",
+        "web_no_configurada": (
+            "🌐 La recherche web n'est pas encore configurée, je ne "
+            "peux donc pas confirmer les données de dernière minute."
+        ),
+        "web_no_disponible": "🌐 Je n'ai pas pu consulter le web pour le moment.",
+        "error_413": (
+            "⚠️ **La conversation est devenue trop longue pour le "
+            "forfait gratuit de Groq en ce moment (trop de tokens "
+            "par minute).**\n\n"
+            "Essaie d'appuyer sur '➕ Nouvelle conversation' pour "
+            "repartir de zéro, ou attends une minute et réessaie."
+        ),
+        "invitado": "Invité",
+    },
+}
+
+
+def t(clave, idioma=None, **kwargs):
+    """Devuelve el texto de la interfaz en el idioma elegido por el
+    usuario (o en español si aún no hay ninguno elegido, como en la
+    pantalla de inicio de sesión). Si la clave falta en ese idioma,
+    cae en español antes que mostrar un hueco en blanco.
+
+    Se puede pasar `idioma` explícitamente para los sitios donde
+    todavía no hay contexto de `st.session_state` (por ejemplo,
+    dentro del generador que llama a Groq)."""
+
+    if idioma is None:
+        idioma = st.session_state.get("idioma", IDIOMA_POR_DEFECTO)
+
+    texto = TEXTOS.get(idioma, TEXTOS[IDIOMA_POR_DEFECTO]).get(clave)
+
+    if texto is None:
+        texto = TEXTOS[IDIOMA_POR_DEFECTO].get(clave, clave)
+
+    return texto.format(**kwargs) if kwargs else texto
+
 
 def _cargar_local(usuario_id):
     ruta = _ruta_datos_usuario(usuario_id)
@@ -1413,13 +1828,7 @@ def obtener_respuesta_ia_stream(
 
         if response.status_code == 413:
 
-            yield (
-                "⚠️ **La conversación se ha quedado demasiado larga "
-                "para el plan gratuito de Groq en este momento "
-                "(demasiados tokens por minuto).**\n\n"
-                "Prueba a pulsar '➕ Nueva conversación' para empezar "
-                "de cero, o espera un minuto y vuelve a intentarlo."
-            )
+            yield t("error_413", idioma=idioma)
 
             return
 
@@ -2310,7 +2719,7 @@ def _mostrar_ajustes():
     se abre aparte, cuando de verdad se necesita."""
 
     tab_idioma, tab_memoria, tab_cuenta, tab_info = st.tabs(
-        ["🌐 Idioma", "🧠 Memoria", "👤 Cuenta", "ℹ️ Estado"]
+        [t("tab_idioma"), t("tab_memoria"), t("tab_cuenta"), t("tab_estado")]
     )
 
     # --------------------------------------------
@@ -2319,11 +2728,7 @@ def _mostrar_ajustes():
 
     with tab_idioma:
 
-        st.caption(
-            "Elige en qué idioma quieres que te responda ORIA. Puedes "
-            "escribirle en cualquier idioma: ella siempre te "
-            "contestará en el que elijas aquí."
-        )
+        st.caption(t("idioma_caption"))
 
         codigos = list(IDIOMAS_DISPONIBLES.keys())
         idioma_actual = st.session_state.get("idioma", IDIOMA_POR_DEFECTO)
@@ -2343,7 +2748,9 @@ def _mostrar_ajustes():
         if nuevo_idioma != idioma_actual:
             st.session_state.idioma = nuevo_idioma
             guardar_todo()
-            st.success(f"Idioma cambiado a {IDIOMAS_DISPONIBLES[nuevo_idioma]}.")
+            st.success(
+                t("idioma_cambiado", idioma=IDIOMAS_DISPONIBLES[nuevo_idioma])
+            )
             st.rerun()
 
     # --------------------------------------------
@@ -2352,11 +2759,7 @@ def _mostrar_ajustes():
 
     with tab_memoria:
 
-        st.caption(
-            "Escribe aquí datos que quieras que ORIA recuerde siempre "
-            "(tu nombre, tus preferencias, tu contexto...). Se "
-            "incluirán en todas las conversaciones."
-        )
+        st.caption(t("memoria_caption"))
 
         nueva_memoria = st.text_area(
             "Datos a recordar",
@@ -2365,10 +2768,10 @@ def _mostrar_ajustes():
             label_visibility="collapsed",
         )
 
-        if st.button("Guardar memoria", use_container_width=True):
+        if st.button(t("guardar_memoria"), use_container_width=True):
             st.session_state.memoria = nueva_memoria
             guardar_todo()
-            st.success("Memoria guardada.")
+            st.success(t("memoria_guardada"))
 
     # --------------------------------------------
     # CUENTA
@@ -2377,35 +2780,31 @@ def _mostrar_ajustes():
     with tab_cuenta:
 
         if st.session_state.get("es_invitado"):
-            st.caption(
-                "👤 Modo invitado: el inicio de sesión aún no está "
-                "configurado."
-            )
+            st.caption(t("cuenta_invitado"))
         else:
             st.caption(
-                f"Sesión iniciada como "
-                f"**{st.session_state.get('usuario_nombre', '')}**."
+                t(
+                    "cuenta_sesion_como",
+                    nombre=st.session_state.get("usuario_nombre", ""),
+                )
             )
 
             st.button(
-                "Cerrar sesión",
+                t("cerrar_sesion"),
                 on_click=_cerrar_sesion,
                 use_container_width=True,
             )
 
             st.markdown("")
 
-            with st.expander("⚠️ Eliminar mi cuenta y mis datos"):
-                st.caption(
-                    "Borra todas tus conversaciones y tu memoria de "
-                    "forma permanente. No se puede deshacer."
-                )
+            with st.expander(t("eliminar_cuenta_titulo")):
+                st.caption(t("eliminar_cuenta_caption"))
                 if st.checkbox(
-                    "Sí, quiero eliminar todos mis datos",
+                    t("eliminar_cuenta_checkbox"),
                     key="confirmar_borrado",
                 ):
                     if st.button(
-                        "Eliminar definitivamente",
+                        t("eliminar_definitivamente"),
                         type="primary",
                         use_container_width=True,
                     ):
@@ -2413,17 +2812,11 @@ def _mostrar_ajustes():
                             st.session_state.usuario_id
                         )
                         _cerrar_sesion()
-                        st.success("Tus datos se han eliminado.")
+                        st.success(t("datos_eliminados"))
                         st.rerun()
 
         st.markdown("---")
-        st.caption(
-            "Comparte el enlace de esta página con quien quieras: "
-            "cada persona entra con su propia cuenta y tiene su "
-            "historial y memoria separados del tuyo. En el móvil "
-            "pueden usar 'Añadir a pantalla de inicio' para que "
-            "funcione como una app."
-        )
+        st.caption(t("compartir_caption"))
 
     # --------------------------------------------
     # ESTADO DE LAS INTEGRACIONES
@@ -2432,29 +2825,18 @@ def _mostrar_ajustes():
     with tab_info:
 
         if obtener_tavily_key():
-            st.caption("🌐 Búsqueda web activa")
+            st.caption(t("estado_web_activa"))
         else:
-            st.caption("🌐 Búsqueda web sin configurar")
+            st.caption(t("estado_web_inactiva"))
 
         if supabase_activo():
-            st.caption("☁️ Datos guardados en la nube")
+            st.caption(t("estado_nube"))
         else:
-            st.caption(
-                "⚠️ Datos guardados solo en el servidor (pueden "
-                "perderse al reiniciar). Configura Supabase para "
-                "guardarlos en la nube."
-            )
+            st.caption(t("estado_servidor"))
 
         st.markdown("---")
 
-        st.caption(
-            "ORIA mejora automáticamente tu descripción antes de "
-            "generar una imagen. Se usa el generador gratuito y "
-            "anónimo de Pollinations.ai, que no requiere cuenta ni "
-            "pago, pero por eso incluye una pequeña marca de agua y "
-            "a veces algún error puntual bajo mucha demanda — es el "
-            "límite normal de una herramienta 100% gratuita."
-        )
+        st.caption(t("estado_calidad_imagen"))
 
 
 with st.sidebar:
@@ -2481,7 +2863,7 @@ with st.sidebar:
 
     with st.container(key="boton_nueva_conversacion"):
         if st.button(
-            "＋  Nueva conversación",
+            t("nueva_conversacion"),
             use_container_width=True,
         ):
             st.session_state.current_chat_id = None
@@ -2511,7 +2893,7 @@ with st.sidebar:
 
                 titulo_chat = chat_info.get(
                     "title",
-                    "Nueva conversación",
+                    t("conversacion_sin_titulo"),
                 )
 
                 if st.button(
@@ -2548,7 +2930,7 @@ with st.sidebar:
     with st.container(key="fila_cuenta"):
 
         nombre_usuario = (
-            "Invitado"
+            t("invitado")
             if st.session_state.get("es_invitado")
             else st.session_state.get("usuario_nombre", "")
         )
@@ -2615,7 +2997,7 @@ if len(mensajes_actuales) == 0:
         st.markdown(LOGO_HTML, unsafe_allow_html=True)
 
         st.markdown(
-            '<div class="oria-tagline">¿En qué te puedo ayudar hoy?</div>',
+            f'<div class="oria-tagline">{t("tagline_bienvenida")}</div>',
             unsafe_allow_html=True,
         )
 
@@ -2676,7 +3058,7 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
             fuentes = message.get("sources") or []
 
             if fuentes:
-                with st.expander(f"🔎 Fuentes ({len(fuentes)})"):
+                with st.expander(t("fuentes", n=len(fuentes))):
                     for n, fuente in enumerate(fuentes, 1):
                         titulo = (
                             str(fuente.get("title", ""))
@@ -2694,30 +3076,37 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
             texto_js = json.dumps(str(content))
             id_boton_copiar = f"copiar_{indice_mensaje}"
 
+            idioma_mensaje = st.session_state.get("idioma", IDIOMA_POR_DEFECTO)
+            codigo_voz_js = json.dumps(
+                CODIGO_VOZ_NAVEGADOR.get(idioma_mensaje, "es-ES")
+            )
+            texto_copiar_js = json.dumps(t("boton_copiar", idioma=idioma_mensaje))
+            texto_copiado_js = json.dumps(t("boton_copiado", idioma=idioma_mensaje))
+
             components.html(
                 f"""
                 <div style="margin-top:-6px;display:flex;gap:8px;">
                   <button onclick='
                     window.speechSynthesis.cancel();
                     var u = new SpeechSynthesisUtterance({texto_js});
-                    u.lang = "es-ES";
+                    u.lang = {codigo_voz_js};
                     window.speechSynthesis.speak(u);
                   ' style="
                     background:#F5F5F4;border:none;border-radius:14px;
                     padding:4px 12px;font-size:0.78rem;cursor:pointer;
                     color:#333;
-                  ">🔊 Escuchar</button>
+                  ">{t("boton_escuchar", idioma=idioma_mensaje)}</button>
 
                   <button id="{id_boton_copiar}" onclick='
                     navigator.clipboard.writeText({texto_js});
                     var b = document.getElementById("{id_boton_copiar}");
-                    b.innerText = "✅ Copiado";
-                    setTimeout(function() {{ b.innerText = "📋 Copiar"; }}, 1500);
+                    b.innerText = {texto_copiado_js};
+                    setTimeout(function() {{ b.innerText = {texto_copiar_js}; }}, 1500);
                   ' style="
                     background:#F5F5F4;border:none;border-radius:14px;
                     padding:4px 12px;font-size:0.78rem;cursor:pointer;
                     color:#333;
-                  ">📋 Copiar</button>
+                  ">{t("boton_copiar", idioma=idioma_mensaje)}</button>
                 </div>
                 """,
                 height=36,
@@ -2738,9 +3127,7 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
                     caption=message.get("prompt", ""),
                 )
             else:
-                st.markdown(
-                    "⚠️ *(La imagen generada ya no está disponible)*"
-                )
+                st.markdown(t("imagen_no_disponible"))
 
 
 # ============================================================
@@ -2748,9 +3135,9 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
 # ============================================================
 
 with st.container(key="barra_modos"):
-    modo_imagen = st.toggle("🎨 Imagen", key="modo_imagen")
-    modo_voz = st.toggle("🎤 Voz", key="modo_voz")
-    modo_web = st.toggle("🌐 Web", key="modo_web")
+    modo_imagen = st.toggle(t("toggle_imagen"), key="modo_imagen")
+    modo_voz = st.toggle(t("toggle_voz"), key="modo_voz")
+    modo_web = st.toggle(t("toggle_web"), key="modo_web")
 
 # --------------------------------------------------------------
 # MODO VOZ: grabar y transcribir automáticamente
@@ -2760,7 +3147,7 @@ texto_por_voz = None
 
 if modo_voz:
 
-    audio_grabado = st.audio_input("Pulsa para grabar tu pregunta")
+    audio_grabado = st.audio_input(t("grabar_pregunta"))
 
     if audio_grabado is not None:
 
@@ -2769,17 +3156,17 @@ if modo_voz:
 
         if st.session_state.get("ultimo_audio_procesado") != audio_hash:
 
-            with st.spinner("Transcribiendo tu voz..."):
+            with st.spinner(t("transcribiendo_voz")):
                 texto_transcrito, error_audio = transcribir_audio(audio_bytes)
 
             if error_audio:
-                st.error(f"No se pudo transcribir el audio: {error_audio}")
+                st.error(t("error_transcribir_audio", error=error_audio))
             elif texto_transcrito:
                 st.session_state.ultimo_audio_procesado = audio_hash
                 texto_por_voz = texto_transcrito
 
 entrada = st.chat_input(
-    "Pregunta a ORIA, o adjunta una imagen/PDF...",
+    t("chat_placeholder"),
     accept_file=True,
     file_type=["png", "jpg", "jpeg", "pdf"],
 )
@@ -2813,7 +3200,9 @@ if entrada or texto_por_voz:
         )
 
         titulo_base = user_text if user_text else (
-            f"Archivo: {archivo_adjunto.name}" if archivo_adjunto else "Nueva conversación"
+            t("archivo_titulo", nombre=archivo_adjunto.name)
+            if archivo_adjunto
+            else t("conversacion_sin_titulo")
         )
 
         titulo = titulo_base.strip()
@@ -2898,18 +3287,18 @@ if entrada or texto_por_voz:
 
         if modo_imagen and user_text:
 
-            with st.spinner("Puliendo la descripción..."):
+            with st.spinner(t("puliendo_descripcion")):
                 prompt_mejorado = mejorar_prompt_imagen(user_text)
 
-            with st.spinner("Generando imagen..."):
+            with st.spinner(t("generando_imagen")):
                 imagen_bytes, error = generar_imagen_ia(prompt_mejorado)
 
             if error:
-                st.error(f"No se pudo generar la imagen: {error}")
+                st.error(t("error_generar_imagen", error=error))
                 respuesta_final = {
                     "role": "assistant",
                     "type": "text",
-                    "content": f"⚠️ No he podido generar la imagen: {error}",
+                    "content": t("no_pude_generar_imagen", error=error),
                 }
             else:
                 os.makedirs(CARPETA_IMAGENES, exist_ok=True)
@@ -2935,7 +3324,7 @@ if entrada or texto_por_voz:
 
         elif archivo_adjunto and archivo_adjunto.type == "application/pdf":
 
-            with st.spinner("Leyendo el PDF..."):
+            with st.spinner(t("leyendo_pdf")):
                 texto_pdf, error = extraer_texto_pdf(archivo_adjunto)
 
             if error:
@@ -2943,12 +3332,10 @@ if entrada or texto_por_voz:
                 respuesta_final = {
                     "role": "assistant",
                     "type": "text",
-                    "content": f"⚠️ No he podido leer el PDF: {error}",
+                    "content": t("no_pude_leer_pdf", error=error),
                 }
             else:
-                pregunta = user_text if user_text else (
-                    "Resume este documento y destaca los puntos clave."
-                )
+                pregunta = user_text if user_text else t("resumen_pdf_defecto")
 
                 prompt_aumentado = (
                     f"El usuario ha subido un PDF llamado "
@@ -2982,9 +3369,7 @@ if entrada or texto_por_voz:
 
             data_uri = imagen_a_data_uri(archivo_adjunto)
 
-            pregunta = user_text if user_text else (
-                "Describe esta imagen y explica qué ves con detalle."
-            )
+            pregunta = user_text if user_text else t("describe_imagen_defecto")
 
             respuesta_texto = st.write_stream(
                 obtener_respuesta_ia_stream(
@@ -3027,23 +3412,16 @@ if entrada or texto_por_voz:
                     if previos:
                         consulta = f"{previos[-1][:200]} {user_text}"
 
-                with st.spinner("Buscando en la web..."):
+                with st.spinner(t("buscando_web")):
                     resultados_web, error_web = buscar_en_web(consulta)
 
                 if not resultados_web:
                     web_fallida = True
 
                     if error_web == "no_configurado":
-                        st.caption(
-                            "🌐 La búsqueda web no está configurada "
-                            "todavía, así que no puedo confirmar datos "
-                            "de última hora."
-                        )
+                        st.caption(t("web_no_configurada"))
                     else:
-                        st.caption(
-                            "🌐 No he podido consultar la web ahora "
-                            "mismo."
-                        )
+                        st.caption(t("web_no_disponible"))
 
             respuesta_texto = st.write_stream(
                 obtener_respuesta_ia_stream(
