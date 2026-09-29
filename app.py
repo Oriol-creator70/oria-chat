@@ -13,6 +13,8 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from pypdf import PdfReader
+from pptx import Presentation
+from pptx.dml.color import RGBColor
 
 
 # ============================================================
@@ -39,6 +41,7 @@ st.set_page_config(
 #   - o, si no, en archivos JSON locales (se pueden perder al reiniciar).
 CARPETA_USUARIOS = "usuarios"
 CARPETA_IMAGENES = "imagenes_generadas"
+CARPETA_PRESENTACIONES = "presentaciones_generadas"
 TABLA_SUPABASE = "oria_usuarios"
 
 # Cuántos mensajes recientes mandamos como contexto a Groq.
@@ -517,6 +520,7 @@ TEXTOS = {
         "toggle_imagen": "🎨 Imagen",
         "toggle_voz": "🎤 Voz",
         "toggle_web": "🌐 Web",
+        "toggle_presentacion": "📊 Presentación",
         "grabar_pregunta": "Pulsa para grabar tu pregunta",
         "transcribiendo_voz": "Transcribiendo tu voz...",
         "chat_placeholder": "Pregunta a ORIA, o adjunta una imagen/PDF...",
@@ -535,6 +539,14 @@ TEXTOS = {
         "no_pude_generar_imagen": "⚠️ No he podido generar la imagen: {error}",
         "leyendo_pdf": "Leyendo el PDF...",
         "no_pude_leer_pdf": "⚠️ No he podido leer el PDF: {error}",
+        "generando_contenido_presentacion": "Redactando el contenido de la presentación...",
+        "creando_pptx": "Montando la presentación...",
+        "error_generar_presentacion": "No se pudo generar la presentación: {error}",
+        "no_pude_generar_presentacion": "⚠️ No he podido generar la presentación: {error}",
+        "presentacion_generada": "📊 He creado tu presentación: **{titulo}** ({n} diapositivas).",
+        "descargar_presentacion": "⬇️ Descargar presentación (.pptx)",
+        "pptx_no_disponible": "⚠️ *(Esta presentación ya no está disponible)*",
+        "presentacion_sin_titulo": "Presentación",
         "web_no_configurada": (
             "🌐 La búsqueda web no está configurada todavía, así que "
             "no puedo confirmar datos de última hora."
@@ -609,6 +621,7 @@ TEXTOS = {
         "toggle_imagen": "🎨 Image",
         "toggle_voz": "🎤 Voice",
         "toggle_web": "🌐 Web",
+        "toggle_presentacion": "📊 Slides",
         "grabar_pregunta": "Tap to record your question",
         "transcribiendo_voz": "Transcribing your voice...",
         "chat_placeholder": "Ask ORIA, or attach an image/PDF...",
@@ -627,6 +640,14 @@ TEXTOS = {
         "no_pude_generar_imagen": "⚠️ I couldn't generate the image: {error}",
         "leyendo_pdf": "Reading the PDF...",
         "no_pude_leer_pdf": "⚠️ I couldn't read the PDF: {error}",
+        "generando_contenido_presentacion": "Writing the presentation content...",
+        "creando_pptx": "Putting the slides together...",
+        "error_generar_presentacion": "Couldn't generate the presentation: {error}",
+        "no_pude_generar_presentacion": "⚠️ I couldn't generate the presentation: {error}",
+        "presentacion_generada": "📊 I've created your presentation: **{titulo}** ({n} slides).",
+        "descargar_presentacion": "⬇️ Download presentation (.pptx)",
+        "pptx_no_disponible": "⚠️ *(This presentation is no longer available)*",
+        "presentacion_sin_titulo": "Presentation",
         "web_no_configurada": (
             "🌐 Web search isn't configured yet, so I can't confirm "
             "up-to-the-minute data."
@@ -702,6 +723,7 @@ TEXTOS = {
         "toggle_imagen": "🎨 Imatge",
         "toggle_voz": "🎤 Veu",
         "toggle_web": "🌐 Web",
+        "toggle_presentacion": "📊 Presentació",
         "grabar_pregunta": "Prem per gravar la teva pregunta",
         "transcribiendo_voz": "Transcrivint la teva veu...",
         "chat_placeholder": "Pregunta a l'ORIA, o adjunta una imatge/PDF...",
@@ -720,6 +742,14 @@ TEXTOS = {
         "no_pude_generar_imagen": "⚠️ No he pogut generar la imatge: {error}",
         "leyendo_pdf": "Llegint el PDF...",
         "no_pude_leer_pdf": "⚠️ No he pogut llegir el PDF: {error}",
+        "generando_contenido_presentacion": "Redactant el contingut de la presentació...",
+        "creando_pptx": "Muntant la presentació...",
+        "error_generar_presentacion": "No s'ha pogut generar la presentació: {error}",
+        "no_pude_generar_presentacion": "⚠️ No he pogut generar la presentació: {error}",
+        "presentacion_generada": "📊 He creat la teva presentació: **{titulo}** ({n} diapositives).",
+        "descargar_presentacion": "⬇️ Descarregar presentació (.pptx)",
+        "pptx_no_disponible": "⚠️ *(Aquesta presentació ja no està disponible)*",
+        "presentacion_sin_titulo": "Presentació",
         "web_no_configurada": (
             "🌐 La cerca web encara no està configurada, així que no "
             "puc confirmar dades de darrera hora."
@@ -797,6 +827,7 @@ TEXTOS = {
         "toggle_imagen": "🎨 Image",
         "toggle_voz": "🎤 Voix",
         "toggle_web": "🌐 Web",
+        "toggle_presentacion": "📊 Présentation",
         "grabar_pregunta": "Appuie pour enregistrer ta question",
         "transcribiendo_voz": "Transcription de ta voix...",
         "chat_placeholder": "Demande à ORIA, ou joins une image/PDF...",
@@ -815,6 +846,14 @@ TEXTOS = {
         "no_pude_generar_imagen": "⚠️ Je n'ai pas pu générer l'image : {error}",
         "leyendo_pdf": "Lecture du PDF...",
         "no_pude_leer_pdf": "⚠️ Je n'ai pas pu lire le PDF : {error}",
+        "generando_contenido_presentacion": "Rédaction du contenu de la présentation...",
+        "creando_pptx": "Assemblage de la présentation...",
+        "error_generar_presentacion": "Impossible de générer la présentation : {error}",
+        "no_pude_generar_presentacion": "⚠️ Je n'ai pas pu générer la présentation : {error}",
+        "presentacion_generada": "📊 J'ai créé ta présentation : **{titulo}** ({n} diapositives).",
+        "descargar_presentacion": "⬇️ Télécharger la présentation (.pptx)",
+        "pptx_no_disponible": "⚠️ *(Cette présentation n'est plus disponible)*",
+        "presentacion_sin_titulo": "Présentation",
         "web_no_configurada": (
             "🌐 La recherche web n'est pas encore configurée, je ne "
             "peux donc pas confirmer les données de dernière minute."
@@ -1178,14 +1217,27 @@ def mejorar_prompt_imagen(prompt_simple):
                     "role": "system",
                     "content": (
                         "Eres un experto escribiendo prompts para modelos "
-                        "de generación de imágenes (tipo Flux). Convierte "
-                        "la idea del usuario en una descripción muy "
-                        "detallada y visual, en una sola frase larga: "
-                        "sujeto, estilo artístico, iluminación, encuadre, "
+                        "de generación de imágenes (tipo Flux). Tu trabajo "
+                        "es EXPANDIR la idea del usuario en una descripción "
+                        "muy detallada y visual, en una sola frase larga, "
+                        "añadiendo estilo artístico, iluminación, encuadre, "
                         "ambiente y calidad (ej. 'fotografía realista', "
-                        "'8k', 'cinematográfico', 'alto detalle'...). "
-                        "Responde ÚNICAMENTE con el prompt final, sin "
-                        "comillas, explicaciones ni texto adicional."
+                        "'8k', 'cinematográfico', 'alto detalle'...).\n\n"
+                        "Regla más importante, por encima de cualquier "
+                        "otra: nunca cambies, quites ni añadas elementos "
+                        "concretos que el usuario haya pedido explícitamente "
+                        "(número de personas u objetos, colores, texto "
+                        "exacto que deba aparecer, marcas, animales, "
+                        "acciones...). Solo añades detalle alrededor de "
+                        "exactamente lo que ha pedido, nunca inventas cosas "
+                        "nuevas que cambien el resultado ni te tomas "
+                        "libertades creativas con lo que ya es específico. "
+                        "Si el usuario ya ha sido muy concreto, limítate a "
+                        "pulir el estilo y la calidad, no el contenido.\n\n"
+                        "Responde ÚNICAMENTE con el prompt final, en "
+                        "inglés (los modelos de imagen entienden mejor "
+                        "inglés), sin comillas, explicaciones ni texto "
+                        "adicional."
                     ),
                 },
                 {"role": "user", "content": prompt_simple},
@@ -1214,12 +1266,20 @@ def mejorar_prompt_imagen(prompt_simple):
         return prompt_simple
 
 
-def generar_imagen_ia(prompt_imagen, intentos=2):
+def generar_imagen_ia(prompt_imagen, intentos=3):
     """Genera una imagen a partir de un texto usando Pollinations.ai
     (servicio gratuito). Si hay una POLLINATIONS_API_KEY configurada
     en Secrets, se usa para quitar la marca de agua y tener más
     estabilidad; si no, funciona igualmente en modo anónimo.
-    Devuelve (bytes, error)."""
+    Devuelve (bytes, error).
+
+    Nota: NO añadimos "enhance=true" aquí. Ese parámetro le pide a
+    Pollinations que reescriba el prompt por su cuenta con su propio
+    sistema — pero nosotros ya se lo mandamos muy detallado gracias a
+    `mejorar_prompt_imagen`, así que dejar también el suyo activado
+    hacía que el resultado final se pareciera menos a lo que pidió el
+    usuario (doble reescritura, cada una tirando en una dirección).
+    Sin él, la imagen sigue mucho más fielmente nuestro prompt."""
 
     token = obtener_pollinations_key()
 
@@ -1229,7 +1289,7 @@ def generar_imagen_ia(prompt_imagen, intentos=2):
     url = (
         f"https://image.pollinations.ai/prompt/{prompt_codificado}"
         f"?model=flux&width=1024&height=1024"
-        f"&nologo=true&enhance=true&seed={semilla}"
+        f"&nologo=true&seed={semilla}"
     )
 
     headers = {}
@@ -1261,6 +1321,179 @@ def generar_imagen_ia(prompt_imagen, intentos=2):
             ultimo_error = str(e)
 
     return None, ultimo_error
+
+
+def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
+    """Le pide a Groq el contenido de una presentación (título,
+    subtítulo y diapositivas con sus puntos) en forma de JSON.
+    Devuelve (contenido_dict, error)."""
+
+    api_key = obtener_api_key()
+
+    if not api_key or not api_key.startswith("gsk_"):
+        return None, "No se ha encontrado una GROQ_API_KEY válida."
+
+    nombre_idioma = NOMBRE_IDIOMA_PARA_PROMPT.get(
+        idioma, NOMBRE_IDIOMA_PARA_PROMPT[IDIOMA_POR_DEFECTO]
+    )
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": MODELO_GROQ,
+            "stream": False,
+            "temperature": 0.6,
+            "max_completion_tokens": 2200,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un experto creando el contenido de "
+                        "presentaciones profesionales, claras y bien "
+                        "organizadas. A partir del tema que te da el "
+                        "usuario, genera un título principal, un "
+                        "subtítulo breve, y entre 5 y 9 diapositivas de "
+                        "contenido (ajusta el número a la complejidad del "
+                        "tema). Cada diapositiva debe tener un título "
+                        "corto y entre 3 y 5 puntos clave, escritos como "
+                        "frases cortas y concretas (nunca párrafos "
+                        "largos). No repitas el título principal como "
+                        "diapositiva. "
+                        f"Escribe TODO el contenido (títulos, subtítulo y "
+                        f"puntos) en {nombre_idioma}.\n\n"
+                        "Responde ÚNICAMENTE con un JSON válido, sin "
+                        "explicaciones, sin comillas triples ni texto "
+                        "adicional antes o después, con exactamente esta "
+                        "forma:\n"
+                        '{"titulo": "...", "subtitulo": "...", '
+                        '"diapositivas": [{"titulo": "...", "puntos": '
+                        '["...", "..."]}]}'
+                    ),
+                },
+                {"role": "user", "content": tema},
+            ],
+        }
+
+        respuesta = requests.post(
+            URL_GROQ, headers=headers, json=payload, timeout=45
+        )
+
+        if respuesta.status_code != 200:
+            return None, (
+                f"Groq ha devuelto el error {respuesta.status_code} al "
+                "generar el contenido."
+            )
+
+        texto = (
+            respuesta.json()
+            .get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+        # Por si el modelo envuelve el JSON en ```json ... ``` a pesar
+        # de que se lo hemos pedido explícitamente sin eso.
+        texto = re.sub(r"^```(?:json)?\s*|\s*```$", "", texto.strip())
+
+        # Si aun así hay texto antes/después del JSON, nos quedamos
+        # solo con lo que hay entre la primera "{" y la última "}".
+        inicio = texto.find("{")
+        fin = texto.rfind("}")
+        if inicio != -1 and fin != -1 and fin > inicio:
+            texto = texto[inicio:fin + 1]
+
+        try:
+            contenido = json.loads(texto)
+        except json.JSONDecodeError:
+            return None, (
+                "No he podido interpretar el contenido generado. "
+                "Prueba a pedirlo de nuevo, quizás con un tema más "
+                "concreto."
+            )
+
+        if not isinstance(contenido, dict) or not contenido.get(
+            "diapositivas"
+        ):
+            return None, "El contenido generado no tiene el formato esperado."
+
+        return contenido, None
+
+    except requests.exceptions.Timeout:
+        return None, "Generar el contenido ha tardado demasiado."
+
+    except Exception as e:
+        return None, str(e)
+
+
+def _nombre_archivo_seguro(texto, por_defecto="presentacion"):
+    """Limpia un texto (p. ej. el título generado por la IA) para que
+    se pueda usar como nombre de archivo descargable en cualquier
+    sistema operativo, quitando caracteres problemáticos."""
+
+    limpio = re.sub(r'[\\/:*?"<>|]+', "", str(texto)).strip()
+    limpio = re.sub(r"\s+", " ", limpio)
+
+    return limpio[:80] if limpio else por_defecto
+
+
+def crear_pptx(contenido, ruta):
+    """Construye un archivo .pptx a partir del contenido generado
+    (título, subtítulo y diapositivas) y lo guarda en `ruta`."""
+
+    COLOR_ORIA = RGBColor(0x2B, 0x2B, 0x31)
+
+    prs = Presentation()
+
+    # --------------------------------------------
+    # Diapositiva de título
+    # --------------------------------------------
+
+    layout_titulo = prs.slide_layouts[0]
+    slide = prs.slides.add_slide(layout_titulo)
+
+    slide.shapes.title.text = str(contenido.get("titulo", ""))
+    slide.shapes.title.text_frame.paragraphs[0].font.color.rgb = COLOR_ORIA
+
+    if len(slide.placeholders) > 1 and contenido.get("subtitulo"):
+        slide.placeholders[1].text = str(contenido["subtitulo"])
+
+    # --------------------------------------------
+    # Diapositivas de contenido
+    # --------------------------------------------
+
+    layout_contenido = prs.slide_layouts[1]
+
+    for diapo in contenido.get("diapositivas", []):
+
+        slide = prs.slides.add_slide(layout_contenido)
+        slide.shapes.title.text = str(diapo.get("titulo", ""))
+        slide.shapes.title.text_frame.paragraphs[0].font.color.rgb = COLOR_ORIA
+
+        marcador_cuerpo = None
+        for ph in slide.placeholders:
+            if ph.placeholder_format.idx != 0:
+                marcador_cuerpo = ph
+                break
+
+        if marcador_cuerpo is None:
+            continue
+
+        cuerpo = marcador_cuerpo.text_frame
+        cuerpo.clear()
+
+        puntos = diapo.get("puntos") or []
+
+        for indice, punto in enumerate(puntos):
+            parrafo = cuerpo.paragraphs[0] if indice == 0 else cuerpo.add_paragraph()
+            parrafo.text = str(punto)
+            parrafo.level = 0
+
+    prs.save(ruta)
 
 
 def transcribir_audio(audio_bytes, nombre_archivo="grabacion.wav"):
@@ -2225,8 +2458,10 @@ esto: la barra lateral ya sale abierta sola. */
     }
 
     .st-key-barra_modos {
-        bottom: 5.6rem;
-        gap: 1rem !important;
+        bottom: 6.4rem;
+        gap: 0.6rem 1rem !important;
+        flex-wrap: wrap !important;
+        max-width: calc(100vw - 1.4rem);
     }
 
     /* Los interruptores en columna en vez de apretujados uno
@@ -3129,6 +3364,44 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
             else:
                 st.markdown(t("imagen_no_disponible"))
 
+    # --------------------------------------------
+    # MENSAJE DE LA IA (PRESENTACIÓN GENERADA)
+    # --------------------------------------------
+
+    elif role == "assistant" and tipo == "pptx":
+
+        with st.chat_message("assistant"):
+
+            if os.path.exists(content):
+
+                titulo_pptx = message.get(
+                    "titulo", t("presentacion_sin_titulo")
+                )
+                n_diapositivas = message.get("n_diapositivas", 0)
+
+                st.markdown(
+                    t(
+                        "presentacion_generada",
+                        titulo=titulo_pptx,
+                        n=n_diapositivas,
+                    )
+                )
+
+                with open(content, "rb") as f:
+                    st.download_button(
+                        t("descargar_presentacion"),
+                        data=f.read(),
+                        file_name=f"{_nombre_archivo_seguro(titulo_pptx)}.pptx",
+                        mime=(
+                            "application/vnd.openxmlformats-officedocument"
+                            ".presentationml.presentation"
+                        ),
+                        use_container_width=True,
+                        key=f"descargar_pptx_{indice_mensaje}",
+                    )
+            else:
+                st.markdown(t("pptx_no_disponible"))
+
 
 # ============================================================
 # 13. INPUT DEL CHAT
@@ -3138,6 +3411,9 @@ with st.container(key="barra_modos"):
     modo_imagen = st.toggle(t("toggle_imagen"), key="modo_imagen")
     modo_voz = st.toggle(t("toggle_voz"), key="modo_voz")
     modo_web = st.toggle(t("toggle_web"), key="modo_web")
+    modo_presentacion = st.toggle(
+        t("toggle_presentacion"), key="modo_presentacion"
+    )
 
 # --------------------------------------------------------------
 # MODO VOZ: grabar y transcribir automáticamente
@@ -3317,6 +3593,84 @@ if entrada or texto_por_voz:
                     "content": nombre_archivo,
                     "prompt": user_text,
                 }
+
+        # ----------------------------------------------------
+        # MODO: GENERAR PRESENTACIÓN (.pptx)
+        # ----------------------------------------------------
+
+        elif modo_presentacion and user_text:
+
+            with st.spinner(t("generando_contenido_presentacion")):
+                contenido_pptx, error = generar_contenido_presentacion(
+                    user_text, idioma=st.session_state.idioma
+                )
+
+            if error or not contenido_pptx:
+                st.error(t("error_generar_presentacion", error=error))
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": t(
+                        "no_pude_generar_presentacion", error=error
+                    ),
+                }
+            else:
+                with st.spinner(t("creando_pptx")):
+                    os.makedirs(CARPETA_PRESENTACIONES, exist_ok=True)
+                    nombre_archivo = os.path.join(
+                        CARPETA_PRESENTACIONES, f"{uuid.uuid4()}.pptx"
+                    )
+                    try:
+                        crear_pptx(contenido_pptx, nombre_archivo)
+                        error_pptx = None
+                    except Exception as e:
+                        error_pptx = str(e)
+
+                if error_pptx:
+                    st.error(t("error_generar_presentacion", error=error_pptx))
+                    respuesta_final = {
+                        "role": "assistant",
+                        "type": "text",
+                        "content": t(
+                            "no_pude_generar_presentacion", error=error_pptx
+                        ),
+                    }
+                else:
+                    titulo_pptx = contenido_pptx.get(
+                        "titulo", t("presentacion_sin_titulo")
+                    )
+                    n_diapositivas = len(
+                        contenido_pptx.get("diapositivas", [])
+                    )
+
+                    st.markdown(
+                        t(
+                            "presentacion_generada",
+                            titulo=titulo_pptx,
+                            n=n_diapositivas,
+                        )
+                    )
+
+                    with open(nombre_archivo, "rb") as f:
+                        st.download_button(
+                            t("descargar_presentacion"),
+                            data=f.read(),
+                            file_name=f"{_nombre_archivo_seguro(titulo_pptx)}.pptx",
+                            mime=(
+                                "application/vnd.openxmlformats-officedocument"
+                                ".presentationml.presentation"
+                            ),
+                            use_container_width=True,
+                        )
+
+                    respuesta_final = {
+                        "role": "assistant",
+                        "type": "pptx",
+                        "content": nombre_archivo,
+                        "prompt": user_text,
+                        "titulo": titulo_pptx,
+                        "n_diapositivas": n_diapositivas,
+                    }
 
         # ----------------------------------------------------
         # MODO: PDF ADJUNTO
