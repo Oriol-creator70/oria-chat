@@ -1765,22 +1765,46 @@ st.markdown(
 # Barra lateral propia para el móvil (no depende de ningún control
 # interno de Streamlit, que en algunas versiones no aparece o no se
 # puede activar por CSS): un botón ☰ que añade/quita una clase en
-# <body>, y un fondo oscuro para poder cerrarla tocando fuera. El
-# propio <body> no lo vuelve a crear Streamlit en cada actualización
-# de la página, así que la clase se mantiene aunque abras un chat,
-# borres uno, etc.
-st.markdown(
+# <body>, y un fondo oscuro para poder cerrarla tocando fuera.
+#
+# Importante: esto NO se hace con st.markdown (el "onclick" dentro
+# de HTML puesto con st.markdown puede quedar bloqueado por el
+# navegador y por eso no funcionaba). Se hace con
+# streamlit.components.v1.html, que sí ejecuta JavaScript de
+# verdad. El script vive en un iframe aparte, así que entra en el
+# documento real de la página (window.parent.document) y crea ahí
+# el botón y el fondo directamente — comprobando primero que no
+# existan ya, para no duplicarlos cada vez que la app se actualiza.
+components.html(
     """
-    <div
-        id="oria-boton-menu"
-        onclick="document.body.classList.toggle('oria-sidebar-abierta')"
-    >☰</div>
-    <div
-        id="oria-fondo-sidebar"
-        onclick="document.body.classList.remove('oria-sidebar-abierta')"
-    ></div>
+    <script>
+    (function () {
+        var doc = window.parent.document;
+
+        var boton = doc.getElementById("oria-boton-menu");
+        if (!boton) {
+            boton = doc.createElement("div");
+            boton.id = "oria-boton-menu";
+            boton.innerHTML = "&#9776;";
+            doc.body.appendChild(boton);
+        }
+        boton.onclick = function () {
+            doc.body.classList.toggle("oria-sidebar-abierta");
+        };
+
+        var fondo = doc.getElementById("oria-fondo-sidebar");
+        if (!fondo) {
+            fondo = doc.createElement("div");
+            fondo.id = "oria-fondo-sidebar";
+            doc.body.appendChild(fondo);
+        }
+        fondo.onclick = function () {
+            doc.body.classList.remove("oria-sidebar-abierta");
+        };
+    })();
+    </script>
     """,
-    unsafe_allow_html=True,
+    height=0,
 )
 
 
