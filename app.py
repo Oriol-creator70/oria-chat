@@ -1654,11 +1654,16 @@ protagonismo a la lista. */
     text-transform: uppercase;
 }
 
-/* Botón propio para abrir la barra lateral en el móvil (el interno
-de Streamlit no se puede mostrar de forma fiable en todas las
-versiones, así que ponemos el nuestro). Solo se ve en pantallas
-estrechas: en ordenador la barra lateral ya sale abierta sola. */
+/* Barra lateral propia para el móvil: en vez de depender del botón
+interno de Streamlit para abrir/cerrar la barra lateral (no
+funciona igual en todas las versiones), la controlamos nosotros
+del todo con una clase en <body>. En ordenador no se toca nada de
+esto: la barra lateral ya sale abierta sola. */
 #oria-boton-menu {
+    display: none;
+}
+
+#oria-fondo-sidebar {
     display: none;
 }
 
@@ -1669,7 +1674,7 @@ estrechas: en ordenador la barra lateral ya sale abierta sola. */
         position: fixed;
         top: 0.7rem;
         left: 0.7rem;
-        z-index: 999999;
+        z-index: 1000001;
         width: 40px;
         height: 40px;
         border-radius: 10px;
@@ -1687,6 +1692,36 @@ estrechas: en ordenador la barra lateral ya sale abierta sola. */
     /* Deja hueco para que el botón no tape el logo/título de arriba */
     [data-testid="stMainBlockContainer"] {
         padding-top: 3.6rem !important;
+    }
+
+    /* La barra lateral, oculta fuera de la pantalla por defecto y
+    fija (para que se quede encima de todo, como un cajón). */
+    [data-testid="stSidebar"] {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        height: 100vh !important;
+        width: 85vw !important;
+        max-width: 320px !important;
+        z-index: 1000000 !important;
+        box-shadow: 2px 0 16px rgba(0,0,0,0.18);
+        transform: translateX(-100%);
+        transition: transform 0.22s ease-in-out;
+    }
+
+    /* Cuando <body> lleva la clase "oria-sidebar-abierta" (la pone
+    nuestro botón ☰), la barra lateral entra en pantalla. */
+    body.oria-sidebar-abierta [data-testid="stSidebar"] {
+        transform: translateX(0) !important;
+    }
+
+    /* Fondo oscuro detrás, para poder cerrar tocando fuera. */
+    body.oria-sidebar-abierta #oria-fondo-sidebar {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 999999;
     }
 }
 
@@ -1727,34 +1762,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Botón propio (no de Streamlit) para abrir la barra lateral en el
-# móvil. Al tocarlo, busca el control nativo de Streamlit que abre o
-# cierra la barra lateral y simula un click sobre él — así seguimos
-# usando el mecanismo real de Streamlit (no inventamos una barra
-# lateral aparte), solo le damos un botón visible y fácil de tocar
-# porque el suyo no se ve bien en todos los móviles/versiones.
+# Barra lateral propia para el móvil (no depende de ningún control
+# interno de Streamlit, que en algunas versiones no aparece o no se
+# puede activar por CSS): un botón ☰ que añade/quita una clase en
+# <body>, y un fondo oscuro para poder cerrarla tocando fuera. El
+# propio <body> no lo vuelve a crear Streamlit en cada actualización
+# de la página, así que la clase se mantiene aunque abras un chat,
+# borres uno, etc.
 st.markdown(
     """
-    <div id="oria-boton-menu" onclick="
-        (function () {
-            function intentar(selector) {
-                var el = document.querySelector(selector);
-                if (el && typeof el.click === 'function') {
-                    el.click();
-                    return true;
-                }
-                return false;
-            }
-            intentar('[data-testid=\\'stSidebarCollapsedControl\\'] button') ||
-            intentar('[data-testid=\\'stSidebarCollapsedControl\\']') ||
-            intentar('[data-testid=\\'collapsedControl\\'] button') ||
-            intentar('[data-testid=\\'collapsedControl\\']') ||
-            intentar('[data-testid*=\\'CollapsedControl\\'] button') ||
-            intentar('[data-testid*=\\'CollapsedControl\\']') ||
-            intentar('button[aria-label*=\\'sidebar\\' i]') ||
-            intentar('button[title*=\\'sidebar\\' i]');
-        })();
-    ">☰</div>
+    <div
+        id="oria-boton-menu"
+        onclick="document.body.classList.toggle('oria-sidebar-abierta')"
+    >☰</div>
+    <div
+        id="oria-fondo-sidebar"
+        onclick="document.body.classList.remove('oria-sidebar-abierta')"
+    ></div>
     """,
     unsafe_allow_html=True,
 )
