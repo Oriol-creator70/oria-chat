@@ -1654,6 +1654,42 @@ protagonismo a la lista. */
     text-transform: uppercase;
 }
 
+/* Botón propio para abrir la barra lateral en el móvil (el interno
+de Streamlit no se puede mostrar de forma fiable en todas las
+versiones, así que ponemos el nuestro). Solo se ve en pantallas
+estrechas: en ordenador la barra lateral ya sale abierta sola. */
+#oria-boton-menu {
+    display: none;
+}
+
+@media (max-width: 768px) {
+
+    #oria-boton-menu {
+        display: flex;
+        position: fixed;
+        top: 0.7rem;
+        left: 0.7rem;
+        z-index: 999999;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background-color: #FFFFFF;
+        border: 1px solid #E2E2DD;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1.2rem;
+        color: #2B2B31;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Deja hueco para que el botón no tape el logo/título de arriba */
+    [data-testid="stMainBlockContainer"] {
+        padding-top: 3.6rem !important;
+    }
+}
+
 /* Ajustes para pantallas de móvil */
 @media (max-width: 640px) {
 
@@ -1688,6 +1724,38 @@ protagonismo a la lista. */
 
 st.markdown(
     css_code,
+    unsafe_allow_html=True,
+)
+
+# Botón propio (no de Streamlit) para abrir la barra lateral en el
+# móvil. Al tocarlo, busca el control nativo de Streamlit que abre o
+# cierra la barra lateral y simula un click sobre él — así seguimos
+# usando el mecanismo real de Streamlit (no inventamos una barra
+# lateral aparte), solo le damos un botón visible y fácil de tocar
+# porque el suyo no se ve bien en todos los móviles/versiones.
+st.markdown(
+    """
+    <div id="oria-boton-menu" onclick="
+        (function () {
+            function intentar(selector) {
+                var el = document.querySelector(selector);
+                if (el && typeof el.click === 'function') {
+                    el.click();
+                    return true;
+                }
+                return false;
+            }
+            intentar('[data-testid=\\'stSidebarCollapsedControl\\'] button') ||
+            intentar('[data-testid=\\'stSidebarCollapsedControl\\']') ||
+            intentar('[data-testid=\\'collapsedControl\\'] button') ||
+            intentar('[data-testid=\\'collapsedControl\\']') ||
+            intentar('[data-testid*=\\'CollapsedControl\\'] button') ||
+            intentar('[data-testid*=\\'CollapsedControl\\']') ||
+            intentar('button[aria-label*=\\'sidebar\\' i]') ||
+            intentar('button[title*=\\'sidebar\\' i]');
+        })();
+    ">☰</div>
+    """,
     unsafe_allow_html=True,
 )
 
