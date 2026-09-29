@@ -4,3 +4,4 @@ httpx
 requests
 pypdf
 supabase>=2.9.0
+python-pptx
