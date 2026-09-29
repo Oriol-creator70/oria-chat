@@ -93,12 +93,26 @@ def _headers_supabase(key, extra=None):
     return headers
 
 
-@st.cache_resource(show_spinner=False)
+_CACHE_CLIENTE_SUPABASE = {}
+
+
 def obtener_cliente_supabase_auth():
     """Cliente de supabase-py, solo para el login por email (código de
     un solo uso). El resto de datos (chats y memoria) se sigue
     leyendo/escribiendo con requests, como ya tenías, para no tocar
-    lo que ya funciona."""
+    lo que ya funciona.
+
+    Importante: solo guardamos en caché el cliente cuando SÍ se ha
+    podido crear. Si en algún momento devolviera None (por ejemplo,
+    justo después de desplegar, antes de pegar las claves en
+    Secrets) y usáramos @st.cache_resource, ese None quedaría
+    guardado para siempre mientras la app siga encendida, aunque
+    luego añadas las claves correctamente — parecería que "no
+    funciona" sin ningún motivo aparente. Así, cada vez que falte
+    algo lo volvemos a comprobar."""
+
+    if "cliente" in _CACHE_CLIENTE_SUPABASE:
+        return _CACHE_CLIENTE_SUPABASE["cliente"]
 
     url, key = _config_supabase()
 
@@ -107,7 +121,9 @@ def obtener_cliente_supabase_auth():
 
     try:
         from supabase import create_client
-        return create_client(url, key)
+        cliente = create_client(url, key)
+        _CACHE_CLIENTE_SUPABASE["cliente"] = cliente
+        return cliente
     except Exception as e:
         st.session_state["_error_supabase_auth"] = (
             f"{type(e).__name__}: {e}"
@@ -1519,8 +1535,99 @@ de texto, alineados a la izquierda */
     padding-bottom: 10rem !important;
 }
 
+/* ------------------------------------------------------------
+Barra lateral limpia, estilo Claude: fondo ligeramente distinto
+al del chat, botones sin caja ni sombra (solo texto + icono, con
+un resaltado suave al pasar el ratón o cuando están seleccionados)
+y una fila de cuenta fija abajo del todo.
+------------------------------------------------------------ */
+
+[data-testid="stSidebar"] {
+    background-color: #FAFAF9 !important;
+    border-right: 1px solid #ECECE9;
+}
+
+[data-testid="stSidebar"] > div:first-child {
+    padding-top: 0.8rem;
+}
+
 .stSidebar .stButton > button {
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+    color: #3A3A38 !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    font-weight: 400 !important;
     border-radius: 8px !important;
+    padding: 0.45rem 0.6rem !important;
+    transition: background-color 0.1s ease-in-out;
+}
+
+.stSidebar .stButton > button:hover {
+    background-color: #EFEFEB !important;
+    color: #1A1A1A !important;
+}
+
+.stSidebar .stButton > button[kind="primary"] {
+    background-color: #E8E7E2 !important;
+    color: #1A1A1A !important;
+    font-weight: 500 !important;
+}
+
+.stSidebar .stButton > button[kind="primary"]:hover {
+    background-color: #E0DFDA !important;
+}
+
+/* "Nueva conversación": un poco de contorno para que destaque
+como acción principal, sin ser un botón pesado. */
+.st-key-boton_nueva_conversacion .stButton > button {
+    border: 1px solid #E2E2DD !important;
+    background-color: #FFFFFF !important;
+    font-weight: 500 !important;
+    margin-bottom: 0.3rem;
+}
+
+.st-key-boton_nueva_conversacion .stButton > button:hover {
+    background-color: #F3F3F0 !important;
+}
+
+/* Botón de borrar cada conversación: pequeño e icónico, no roba
+protagonismo a la lista. */
+.st-key-lista_chats .stButton > button {
+    padding: 0.45rem 0.3rem !important;
+    color: #B5B5AF !important;
+}
+
+.st-key-lista_chats .stButton > button:hover {
+    color: #C0392B !important;
+    background-color: #F6E9E7 !important;
+}
+
+/* Fila de cuenta, fija en la parte inferior de la barra lateral. */
+.st-key-fila_cuenta {
+    border-top: 1px solid #ECECE9;
+    padding-top: 0.6rem;
+    margin-top: 0.4rem;
+}
+
+.st-key-fila_cuenta .stButton > button {
+    font-weight: 500 !important;
+}
+
+.oria-avatar-circulo {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 50%;
+    background-color: #2B2B31;
+    color: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
 }
 
 /* Ajustes para pantallas de móvil */
@@ -1926,131 +2033,45 @@ def guardar_todo():
 # 9. BARRA LATERAL
 # ============================================================
 
-with st.sidebar:
 
-    st.markdown(
-        """
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-            <svg width="26" height="26" viewBox="0 0 56 56"
-                 xmlns="http://www.w3.org/2000/svg">
-                <circle cx="28" cy="28" r="25" fill="none"
-                        stroke="#2B2B31" stroke-width="3"/>
-                <circle cx="28" cy="28" r="9" fill="#2B2B31"/>
-                <circle cx="45" cy="13" r="3.5" fill="#2B2B31"/>
-            </svg>
-            <span style="font-size:1.3rem;font-weight:700;letter-spacing:0.04em;">ORIA</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
+def _cerrar_sesion():
+    if st.session_state.get("metodo_login") == "google":
+        st.logout()
+    else:
+        for _clave in (
+            "email_login_verificado",
+            "metodo_login",
+            "usuario_id",
+            "usuario_nombre",
+            "es_invitado",
+            "chats",
+            "memoria",
+            "current_chat_id",
+        ):
+            st.session_state.pop(_clave, None)
+
+
+@st.dialog("Ajustes")
+def _mostrar_ajustes():
+    """Todo lo que no es 'chatear' vive aquí: memoria, estado de las
+    integraciones, cómo compartir ORIA y la cuenta. Así la barra
+    lateral se queda solo con lo esencial (como en Claude) y esto
+    se abre aparte, cuando de verdad se necesita."""
+
+    tab_memoria, tab_cuenta, tab_info = st.tabs(
+        ["🧠 Memoria", "👤 Cuenta", "ℹ️ Estado"]
     )
-    st.caption("Conversaciones")
-
-    # --------------------------------------------
-    # NUEVA CONVERSACIÓN
-    # --------------------------------------------
-
-    if st.button(
-        "➕ Nueva conversación",
-        use_container_width=True,
-        type="primary",
-    ):
-
-        st.session_state.current_chat_id = None
-
-        st.rerun()
-
-    st.markdown("---")
-
-    # --------------------------------------------
-    # LISTA DE CONVERSACIONES
-    # --------------------------------------------
-
-    chats_a_borrar = []
-
-    for cid, chat_info in reversed(
-        list(st.session_state.chats.items())
-    ):
-
-        col_btn, col_del = st.columns(
-            [0.82, 0.18]
-        )
-
-        # Determinar botón seleccionado.
-        if cid == st.session_state.current_chat_id:
-            btn_type = "primary"
-        else:
-            btn_type = "secondary"
-
-        # ----------------------------------------
-        # BOTÓN CHAT
-        # ----------------------------------------
-
-        with col_btn:
-
-            titulo_chat = chat_info.get(
-                "title",
-                "Nueva conversación",
-            )
-
-            if st.button(
-                f"💬 {titulo_chat}",
-                key=f"chat_{cid}",
-                use_container_width=True,
-                type=btn_type,
-            ):
-
-                st.session_state.current_chat_id = cid
-
-                st.rerun()
-
-        # ----------------------------------------
-        # BOTÓN BORRAR
-        # ----------------------------------------
-
-        with col_del:
-
-            if st.button(
-                "🗑️",
-                key=f"del_{cid}",
-            ):
-
-                chats_a_borrar.append(cid)
-
-    # --------------------------------------------
-    # BORRAR CHATS
-    # --------------------------------------------
-
-    if chats_a_borrar:
-
-        for cid in chats_a_borrar:
-
-            if cid in st.session_state.chats:
-
-                del st.session_state.chats[cid]
-
-            if (
-                st.session_state.current_chat_id
-                == cid
-            ):
-
-                st.session_state.current_chat_id = None
-
-        guardar_todo()
-
-        st.rerun()
 
     # --------------------------------------------
     # MEMORIA DE ORIA
     # --------------------------------------------
 
-    st.markdown("---")
-
-    with st.expander("🧠 Memoria de ORIA"):
+    with tab_memoria:
 
         st.caption(
-            "Escribe aquí datos que quieras que ORIA recuerde "
-            "siempre (tu nombre, tus preferencias, tu contexto...). "
-            "Se incluirán en todas las conversaciones."
+            "Escribe aquí datos que quieras que ORIA recuerde siempre "
+            "(tu nombre, tus preferencias, tu contexto...). Se "
+            "incluirán en todas las conversaciones."
         )
 
         nueva_memoria = st.text_area(
@@ -2066,103 +2087,204 @@ with st.sidebar:
             st.success("Memoria guardada.")
 
     # --------------------------------------------
-    # CALIDAD DE LAS IMÁGENES (OPCIONAL)
-    # --------------------------------------------
-
-    with st.expander("🎨 Sobre la calidad de las imágenes"):
-
-        st.caption(
-            "ORIA ya mejora automáticamente tu descripción antes de "
-            "generar la imagen (más detalle, mejor estilo). Se usa "
-            "el generador gratuito y anónimo de Pollinations.ai, que "
-            "no requiere cuenta ni pago, pero por eso incluye una "
-            "pequeña marca de agua y a veces algún error puntual bajo "
-            "mucha demanda — es el límite normal de una herramienta "
-            "100% gratuita. Si alguna vez quieres quitarlo del todo, "
-            "existen servicios de pago (OpenAI, Google) con mejor "
-            "calidad y sin marca de agua."
-        )
-
-    # --------------------------------------------
-    # COMPARTIR ORIA
-    # --------------------------------------------
-
-    with st.expander("🔗 Compartir ORIA"):
-        st.caption(
-            "Comparte el enlace de esta página. Cada persona entra "
-            "con su propia cuenta y tiene su historial y memoria "
-            "separados del tuyo. En el móvil pueden usar 'Añadir a "
-            "pantalla de inicio' para que funcione como una app."
-        )
-
-    # --------------------------------------------
     # CUENTA
     # --------------------------------------------
 
-    st.markdown("---")
+    with tab_cuenta:
 
-    if st.session_state.get("es_invitado"):
-        st.caption(
-            "👤 Modo invitado: el inicio de sesión aún no está "
-            "configurado."
-        )
-    else:
-        st.caption(f"👤 {st.session_state.get('usuario_nombre', '')}")
-
-        def _cerrar_sesion():
-            if st.session_state.get("metodo_login") == "google":
-                st.logout()
-            else:
-                for _clave in (
-                    "email_login_verificado",
-                    "metodo_login",
-                    "usuario_id",
-                    "usuario_nombre",
-                    "es_invitado",
-                    "chats",
-                    "memoria",
-                    "current_chat_id",
-                ):
-                    st.session_state.pop(_clave, None)
-
-        st.button(
-            "Cerrar sesión",
-            on_click=_cerrar_sesion,
-            use_container_width=True,
-        )
-
-        with st.expander("⚠️ Eliminar mi cuenta y mis datos"):
+        if st.session_state.get("es_invitado"):
             st.caption(
-                "Borra todas tus conversaciones y tu memoria de forma "
-                "permanente. No se puede deshacer."
+                "👤 Modo invitado: el inicio de sesión aún no está "
+                "configurado."
             )
-            if st.checkbox(
-                "Sí, quiero eliminar todos mis datos",
-                key="confirmar_borrado",
-            ):
-                if st.button(
-                    "Eliminar definitivamente",
-                    type="primary",
-                    use_container_width=True,
+        else:
+            st.caption(
+                f"Sesión iniciada como "
+                f"**{st.session_state.get('usuario_nombre', '')}**."
+            )
+
+            st.button(
+                "Cerrar sesión",
+                on_click=_cerrar_sesion,
+                use_container_width=True,
+            )
+
+            st.markdown("")
+
+            with st.expander("⚠️ Eliminar mi cuenta y mis datos"):
+                st.caption(
+                    "Borra todas tus conversaciones y tu memoria de "
+                    "forma permanente. No se puede deshacer."
+                )
+                if st.checkbox(
+                    "Sí, quiero eliminar todos mis datos",
+                    key="confirmar_borrado",
                 ):
-                    borrar_cuenta_usuario(st.session_state.usuario_id)
-                    _cerrar_sesion()
-                    st.success("Tus datos se han eliminado.")
+                    if st.button(
+                        "Eliminar definitivamente",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        borrar_cuenta_usuario(
+                            st.session_state.usuario_id
+                        )
+                        _cerrar_sesion()
+                        st.success("Tus datos se han eliminado.")
+                        st.rerun()
+
+        st.markdown("---")
+        st.caption(
+            "Comparte el enlace de esta página con quien quieras: "
+            "cada persona entra con su propia cuenta y tiene su "
+            "historial y memoria separados del tuyo. En el móvil "
+            "pueden usar 'Añadir a pantalla de inicio' para que "
+            "funcione como una app."
+        )
+
+    # --------------------------------------------
+    # ESTADO DE LAS INTEGRACIONES
+    # --------------------------------------------
+
+    with tab_info:
+
+        if obtener_tavily_key():
+            st.caption("🌐 Búsqueda web activa")
+        else:
+            st.caption("🌐 Búsqueda web sin configurar")
+
+        if supabase_activo():
+            st.caption("☁️ Datos guardados en la nube")
+        else:
+            st.caption(
+                "⚠️ Datos guardados solo en el servidor (pueden "
+                "perderse al reiniciar). Configura Supabase para "
+                "guardarlos en la nube."
+            )
+
+        st.markdown("---")
+
+        st.caption(
+            "ORIA mejora automáticamente tu descripción antes de "
+            "generar una imagen. Se usa el generador gratuito y "
+            "anónimo de Pollinations.ai, que no requiere cuenta ni "
+            "pago, pero por eso incluye una pequeña marca de agua y "
+            "a veces algún error puntual bajo mucha demanda — es el "
+            "límite normal de una herramienta 100% gratuita."
+        )
+
+
+with st.sidebar:
+
+    st.markdown(
+        """
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <svg width="24" height="24" viewBox="0 0 56 56"
+                 xmlns="http://www.w3.org/2000/svg">
+                <circle cx="28" cy="28" r="25" fill="none"
+                        stroke="#2B2B31" stroke-width="3"/>
+                <circle cx="28" cy="28" r="9" fill="#2B2B31"/>
+                <circle cx="45" cy="13" r="3.5" fill="#2B2B31"/>
+            </svg>
+            <span style="font-size:1.2rem;font-weight:700;letter-spacing:0.04em;">ORIA</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # --------------------------------------------
+    # NUEVA CONVERSACIÓN
+    # --------------------------------------------
+
+    with st.container(key="boton_nueva_conversacion"):
+        if st.button(
+            "＋  Nueva conversación",
+            use_container_width=True,
+        ):
+            st.session_state.current_chat_id = None
+            st.rerun()
+
+    # --------------------------------------------
+    # LISTA DE CONVERSACIONES
+    # --------------------------------------------
+
+    chats_a_borrar = []
+
+    with st.container(key="lista_chats"):
+
+        for cid, chat_info in reversed(
+            list(st.session_state.chats.items())
+        ):
+
+            col_btn, col_del = st.columns([0.85, 0.15])
+
+            # Determinar botón seleccionado.
+            if cid == st.session_state.current_chat_id:
+                btn_type = "primary"
+            else:
+                btn_type = "secondary"
+
+            with col_btn:
+
+                titulo_chat = chat_info.get(
+                    "title",
+                    "Nueva conversación",
+                )
+
+                if st.button(
+                    titulo_chat,
+                    key=f"chat_{cid}",
+                    use_container_width=True,
+                    type=btn_type,
+                ):
+                    st.session_state.current_chat_id = cid
                     st.rerun()
 
-    if obtener_tavily_key():
-        st.caption("🌐 Búsqueda web activa")
-    else:
-        st.caption("🌐 Búsqueda web sin configurar")
+            with col_del:
 
-    if supabase_activo():
-        st.caption("☁️ Datos guardados en la nube")
-    else:
-        st.caption(
-            "⚠️ Datos guardados solo en el servidor (pueden perderse "
-            "al reiniciar). Configura Supabase para guardarlos "
-            "en la nube."
+                if st.button("✕", key=f"del_{cid}"):
+                    chats_a_borrar.append(cid)
+
+    if chats_a_borrar:
+
+        for cid in chats_a_borrar:
+
+            if cid in st.session_state.chats:
+                del st.session_state.chats[cid]
+
+            if st.session_state.current_chat_id == cid:
+                st.session_state.current_chat_id = None
+
+        guardar_todo()
+        st.rerun()
+
+    # --------------------------------------------
+    # CUENTA (fila fija abajo, abre los ajustes)
+    # --------------------------------------------
+
+    with st.container(key="fila_cuenta"):
+
+        nombre_usuario = (
+            "Invitado"
+            if st.session_state.get("es_invitado")
+            else st.session_state.get("usuario_nombre", "")
         )
+        inicial = (nombre_usuario or "?").strip()[:1] or "?"
+
+        col_avatar, col_nombre = st.columns([0.18, 0.82])
+
+        with col_avatar:
+            st.markdown(
+                f'<div class="oria-avatar-circulo">{inicial}</div>',
+                unsafe_allow_html=True,
+            )
+
+        with col_nombre:
+            if st.button(
+                nombre_usuario,
+                key="abrir_ajustes",
+                use_container_width=True,
+            ):
+                _mostrar_ajustes()
 
 
 # ============================================================
