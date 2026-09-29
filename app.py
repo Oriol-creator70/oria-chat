@@ -1776,6 +1776,38 @@ def mostrar_pantalla_login():
                 "ha vuelto a subir junto con `app.py`."
             )
 
+        else:
+            # No hay excepción (el paquete supabase-py está bien
+            # instalado), así que si no tenemos cliente es porque no
+            # se han encontrado las claves en Secrets. Lo decimos con
+            # detalle para no tener que ir a ciegas.
+            try:
+                _tiene_url = "SUPABASE_URL" in st.secrets
+            except Exception:
+                _tiene_url = False
+            try:
+                _tiene_key = "SUPABASE_KEY" in st.secrets
+            except Exception:
+                _tiene_key = False
+
+            st.warning(
+                "⚠️ El login por correo (crear cuenta / contraseña) "
+                "todavía no está activo porque no encuentro las claves "
+                "de Supabase en los Secrets de la app:\n\n"
+                f"- `SUPABASE_URL`: {'✅ encontrada' if _tiene_url else '❌ no encontrada'}\n"
+                f"- `SUPABASE_KEY`: {'✅ encontrada' if _tiene_key else '❌ no encontrada'}\n\n"
+                "Ve a Streamlit Cloud → tu app (arriba a la derecha, "
+                "menú ⋮) → **Settings → Secrets** y comprueba que están "
+                "escritas así, tal cual, **antes** de la línea "
+                "`[auth]`:\n\n"
+                "```\n"
+                'SUPABASE_URL = "https://xxxxxxxx.supabase.co"\n'
+                'SUPABASE_KEY = "tu_clave_de_supabase"\n'
+                "```\n\n"
+                "Después de guardarlas, reinicia la app (menú ⋮ → "
+                "**Reboot app**)."
+            )
+
         # ------------------------------------------------------
         # GOOGLE
         # ------------------------------------------------------
