@@ -20,6 +20,11 @@ from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 from PIL import Image
+from reportlab.lib.units import inch as _PDF_INCH
+from reportlab.lib.colors import HexColor as _pdf_color
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas as _pdf_canvas
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 
 # ============================================================
@@ -522,12 +527,6 @@ TEXTOS = {
             "a veces algún error puntual bajo mucha demanda — es el "
             "límite normal de una herramienta 100% gratuita."
         ),
-        "toggle_imagen": "Imagen",
-        "toggle_voz": "Voz",
-        "toggle_web": "Web",
-        "toggle_presentacion": "Presentación",
-        "grabar_pregunta": "Pulsa para grabar tu pregunta",
-        "transcribiendo_voz": "Transcribiendo tu voz...",
         "chat_placeholder": "Pregunta a ORIA, o adjunta una imagen/PDF...",
         "boton_escuchar": "Escuchar",
         "boton_copiar": "Copiar",
@@ -536,7 +535,6 @@ TEXTOS = {
         "imagen_no_disponible": "*(La imagen generada ya no está disponible)*",
         "resumen_pdf_defecto": "Resume este documento y destaca los puntos clave.",
         "describe_imagen_defecto": "Describe esta imagen y explica qué ves con detalle.",
-        "error_transcribir_audio": "No se pudo transcribir el audio: {error}",
         "error_generar_imagen": "No se pudo generar la imagen: {error}",
         "buscando_web": "Buscando en la web...",
         "puliendo_descripcion": "Puliendo la descripción...",
@@ -546,10 +544,13 @@ TEXTOS = {
         "no_pude_leer_pdf": "No he podido leer el PDF: {error}",
         "generando_contenido_presentacion": "Redactando el contenido de la presentación...",
         "creando_pptx": "Montando la presentación y buscando imágenes...",
+        "creando_exportables": "Generando el PDF y la vista previa...",
         "error_generar_presentacion": "No se pudo generar la presentación: {error}",
         "no_pude_generar_presentacion": "No he podido generar la presentación: {error}",
-        "presentacion_generada": "He creado tu presentación: **{titulo}** ({n} diapositivas).",
-        "descargar_presentacion": "Descargar presentación (.pptx)",
+        "presentacion_generada": "He creado tu presentación: **{titulo}** ({n} diapositivas). Aquí la tienes, puedes verla antes de descargarla.",
+        "exportar_como": "Exportar como",
+        "descargar_presentacion": "PowerPoint (.pptx)",
+        "descargar_pdf": "PDF",
         "pptx_no_disponible": "*(Esta presentación ya no está disponible)*",
         "presentacion_sin_titulo": "Presentación",
         "web_no_configurada": (
@@ -623,12 +624,6 @@ TEXTOS = {
             "occasionally an error under heavy demand — the normal "
             "limit of a 100% free tool."
         ),
-        "toggle_imagen": "Image",
-        "toggle_voz": "Voice",
-        "toggle_web": "Web",
-        "toggle_presentacion": "Slides",
-        "grabar_pregunta": "Tap to record your question",
-        "transcribiendo_voz": "Transcribing your voice...",
         "chat_placeholder": "Ask ORIA, or attach an image/PDF...",
         "boton_escuchar": "Listen",
         "boton_copiar": "Copy",
@@ -637,7 +632,6 @@ TEXTOS = {
         "imagen_no_disponible": "*(This generated image is no longer available)*",
         "resumen_pdf_defecto": "Summarize this document and highlight the key points.",
         "describe_imagen_defecto": "Describe this image and explain what you see in detail.",
-        "error_transcribir_audio": "Couldn't transcribe the audio: {error}",
         "error_generar_imagen": "Couldn't generate the image: {error}",
         "buscando_web": "Searching the web...",
         "puliendo_descripcion": "Polishing the description...",
@@ -647,10 +641,13 @@ TEXTOS = {
         "no_pude_leer_pdf": "I couldn't read the PDF: {error}",
         "generando_contenido_presentacion": "Writing the presentation content...",
         "creando_pptx": "Putting the slides together and finding images...",
+        "creando_exportables": "Generating the PDF and the preview...",
         "error_generar_presentacion": "Couldn't generate the presentation: {error}",
         "no_pude_generar_presentacion": "I couldn't generate the presentation: {error}",
-        "presentacion_generada": "I've created your presentation: **{titulo}** ({n} slides).",
-        "descargar_presentacion": "Download presentation (.pptx)",
+        "presentacion_generada": "I've created your presentation: **{titulo}** ({n} slides). Here it is, you can preview it before downloading.",
+        "exportar_como": "Export as",
+        "descargar_presentacion": "PowerPoint (.pptx)",
+        "descargar_pdf": "PDF",
         "pptx_no_disponible": "*(This presentation is no longer available)*",
         "presentacion_sin_titulo": "Presentation",
         "web_no_configurada": (
@@ -725,12 +722,6 @@ TEXTOS = {
             "i de vegades algun error puntual sota molta demanda — "
             "és el límit normal d'una eina 100% gratuïta."
         ),
-        "toggle_imagen": "Imatge",
-        "toggle_voz": "Veu",
-        "toggle_web": "Web",
-        "toggle_presentacion": "Presentació",
-        "grabar_pregunta": "Prem per gravar la teva pregunta",
-        "transcribiendo_voz": "Transcrivint la teva veu...",
         "chat_placeholder": "Pregunta a l'ORIA, o adjunta una imatge/PDF...",
         "boton_escuchar": "Escoltar",
         "boton_copiar": "Copiar",
@@ -739,7 +730,6 @@ TEXTOS = {
         "imagen_no_disponible": "*(La imatge generada ja no està disponible)*",
         "resumen_pdf_defecto": "Resumeix aquest document i destaca'n els punts clau.",
         "describe_imagen_defecto": "Descriu aquesta imatge i explica amb detall què hi veus.",
-        "error_transcribir_audio": "No s'ha pogut transcriure l'àudio: {error}",
         "error_generar_imagen": "No s'ha pogut generar la imatge: {error}",
         "buscando_web": "Cercant a la web...",
         "puliendo_descripcion": "Polint la descripció...",
@@ -749,10 +739,13 @@ TEXTOS = {
         "no_pude_leer_pdf": "No he pogut llegir el PDF: {error}",
         "generando_contenido_presentacion": "Redactant el contingut de la presentació...",
         "creando_pptx": "Muntant la presentació i cercant imatges...",
+        "creando_exportables": "Generant el PDF i la vista prèvia...",
         "error_generar_presentacion": "No s'ha pogut generar la presentació: {error}",
         "no_pude_generar_presentacion": "No he pogut generar la presentació: {error}",
-        "presentacion_generada": "He creat la teva presentació: **{titulo}** ({n} diapositives).",
-        "descargar_presentacion": "Descarregar presentació (.pptx)",
+        "presentacion_generada": "He creat la teva presentació: **{titulo}** ({n} diapositives). Aquí la tens, la pots veure abans de descarregar-la.",
+        "exportar_como": "Exportar com a",
+        "descargar_presentacion": "PowerPoint (.pptx)",
+        "descargar_pdf": "PDF",
         "pptx_no_disponible": "*(Aquesta presentació ja no està disponible)*",
         "presentacion_sin_titulo": "Presentació",
         "web_no_configurada": (
@@ -829,12 +822,6 @@ TEXTOS = {
             "et parfois une erreur ponctuelle en cas de forte "
             "demande — la limite normale d'un outil 100% gratuit."
         ),
-        "toggle_imagen": "Image",
-        "toggle_voz": "Voix",
-        "toggle_web": "Web",
-        "toggle_presentacion": "Présentation",
-        "grabar_pregunta": "Appuie pour enregistrer ta question",
-        "transcribiendo_voz": "Transcription de ta voix...",
         "chat_placeholder": "Demande à ORIA, ou joins une image/PDF...",
         "boton_escuchar": "Écouter",
         "boton_copiar": "Copier",
@@ -843,7 +830,6 @@ TEXTOS = {
         "imagen_no_disponible": "*(Cette image générée n'est plus disponible)*",
         "resumen_pdf_defecto": "Résume ce document et souligne les points clés.",
         "describe_imagen_defecto": "Décris cette image et explique en détail ce que tu vois.",
-        "error_transcribir_audio": "Impossible de transcrire l'audio : {error}",
         "error_generar_imagen": "Impossible de générer l'image : {error}",
         "buscando_web": "Recherche sur le web...",
         "puliendo_descripcion": "Amélioration de la description...",
@@ -853,10 +839,13 @@ TEXTOS = {
         "no_pude_leer_pdf": "Je n'ai pas pu lire le PDF : {error}",
         "generando_contenido_presentacion": "Rédaction du contenu de la présentation...",
         "creando_pptx": "Assemblage de la présentation et recherche d'images...",
+        "creando_exportables": "Génération du PDF et de l'aperçu...",
         "error_generar_presentacion": "Impossible de générer la présentation : {error}",
         "no_pude_generar_presentacion": "Je n'ai pas pu générer la présentation : {error}",
-        "presentacion_generada": "J'ai créé ta présentation : **{titulo}** ({n} diapositives).",
-        "descargar_presentacion": "Télécharger la présentation (.pptx)",
+        "presentacion_generada": "J'ai créé ta présentation : **{titulo}** ({n} diapositives). La voici, tu peux la prévisualiser avant de la télécharger.",
+        "exportar_como": "Exporter en",
+        "descargar_presentacion": "PowerPoint (.pptx)",
+        "descargar_pdf": "PDF",
         "pptx_no_disponible": "*(Cette présentation n'est plus disponible)*",
         "presentacion_sin_titulo": "Présentation",
         "web_no_configurada": (
@@ -1330,7 +1319,8 @@ def generar_imagen_ia(prompt_imagen, intentos=3):
 
 def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
     """Le pide a Groq el contenido de una presentación (título,
-    subtítulo y diapositivas con sus puntos) en forma de JSON.
+    subtítulo, categorías/kicker y diapositivas con sus puntos en
+    forma de tarjetas {titulo, detalle}) en forma de JSON.
     Devuelve (contenido_dict, error)."""
 
     api_key = obtener_api_key()
@@ -1352,24 +1342,42 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
             "model": MODELO_GROQ,
             "stream": False,
             "temperature": 0.6,
-            "max_completion_tokens": 2600,
+            "max_completion_tokens": 3200,
             "messages": [
                 {
                     "role": "system",
                     "content": (
-                        "Eres un experto creando el contenido de "
-                        "presentaciones profesionales, claras, bien "
-                        "organizadas y VISUALES. A partir del tema que te "
-                        "da el usuario, genera un título principal, un "
-                        "subtítulo breve, y entre 5 y 9 diapositivas de "
-                        "contenido (ajusta el número a la complejidad del "
-                        "tema). Cada diapositiva debe tener un título "
-                        "corto y entre 3 y 5 puntos clave, escritos como "
-                        "frases cortas y concretas (nunca párrafos "
-                        "largos). No repitas el título principal como "
-                        "diapositiva. "
-                        f"Escribe TODO el contenido (títulos, subtítulo y "
-                        f"puntos) en {nombre_idioma}.\n\n"
+                        "Eres un experto diseñando el CONTENIDO de "
+                        "presentaciones profesionales, del nivel de una "
+                        "consultora o de un buen diseñador -claras, bien "
+                        "organizadas y visuales, con tarjetas en vez de "
+                        "listas de viñetas planas-. A partir del tema "
+                        "que te da el usuario, genera:\n\n"
+                        "1. Un título principal potente, un subtítulo "
+                        "breve, y una 'categoria_portada' (una etiqueta "
+                        "corta en MAYÚSCULAS, 2-4 palabras, tipo "
+                        "'DEPORTE GLOBAL' o 'GUÍA ESTRATÉGICA', que "
+                        "resuma el ámbito del tema).\n"
+                        "2. Entre 5 y 9 diapositivas de contenido "
+                        "(ajusta el número a la complejidad del tema). "
+                        "Cada una lleva:\n"
+                        "   - 'categoria': etiqueta corta en MAYÚSCULAS "
+                        "que resume de qué trata esa diapositiva dentro "
+                        "del conjunto (ej. 'HISTORIA Y EVOLUCIÓN').\n"
+                        "   - 'titulo': un título corto y concreto, no "
+                        "genérico (ej. 'Nacimiento en Acapulco', no "
+                        "'Introducción').\n"
+                        "   - 'puntos': entre 3 y 4 tarjetas, cada una "
+                        "con 'titulo' (una mini-frase impactante de 3-6 "
+                        "palabras, con un dato, año o cifra concreta "
+                        "cuando exista, ej. '1969: Invención en "
+                        "México') y 'detalle' (UNA frase breve que "
+                        "amplíe ese punto, nunca un párrafo largo).\n"
+                        "No repitas el título principal como "
+                        "diapositiva. No uses frases de relleno como "
+                        "'En esta diapositiva veremos'. "
+                        f"Escribe TODO el contenido en {nombre_idioma}, "
+                        "incluidas las categorías.\n\n"
                         "Además, para hacer la presentación más visual, "
                         "decide para la portada y para CADA diapositiva "
                         "si le pega bien una imagen real, y de qué tipo:\n"
@@ -1398,10 +1406,12 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
                         "adicional antes o después, con exactamente esta "
                         "forma:\n"
                         '{"titulo": "...", "subtitulo": "...", '
+                        '"categoria_portada": "...", '
                         '"imagen_portada_query": "...", '
                         '"estilo_imagen_portada": "foto|ninguna", '
-                        '"diapositivas": [{"titulo": "...", "puntos": '
-                        '["...", "..."], "imagen_query": "...", '
+                        '"diapositivas": [{"categoria": "...", '
+                        '"titulo": "...", "puntos": [{"titulo": "...", '
+                        '"detalle": "..."}], "imagen_query": "...", '
                         '"estilo_imagen": "foto|diagrama|ninguna"}]}'
                     ),
                 },
@@ -1483,6 +1493,8 @@ _PPTX_COLOR_TEXTO_CLARO = RGBColor(0xFF, 0xFF, 0xFF)
 _PPTX_COLOR_TEXTO_SECUNDARIO = RGBColor(0x8A, 0x8A, 0x96)
 _PPTX_COLOR_SUBTITULO_CLARO = RGBColor(0xC9, 0xC9, 0xDC)
 _PPTX_COLOR_LINEA = RGBColor(0xE3, 0xE3, 0xE8)
+_PPTX_COLOR_FONDO_CLARO = RGBColor(0xF6, 0xF6, 0xFA)
+_PPTX_COLOR_TARJETA_FONDO = RGBColor(0xFF, 0xFF, 0xFF)
 _PPTX_FUENTE = "Calibri"
 
 
@@ -1507,6 +1519,55 @@ def _pptx_caja_texto(slide, left, top, width, height, anclaje_vertical=None):
     if anclaje_vertical is not None:
         marco.vertical_anchor = anclaje_vertical
     return marco
+
+
+def _pptx_tarjeta_punto(slide, left, top, width, height, titulo, detalle):
+    """Dibuja una 'tarjeta' para un punto de la diapositiva -fondo
+    blanco, esquinas redondeadas, borde de acento a la izquierda,
+    título corto en negrita y una frase de detalle debajo- en vez de
+    la viñeta plana de antes."""
+
+    tarjeta = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height
+    )
+    try:
+        tarjeta.adjustments[0] = 0.07
+    except Exception:
+        pass
+    tarjeta.fill.solid()
+    tarjeta.fill.fore_color.rgb = _PPTX_COLOR_TARJETA_FONDO
+    tarjeta.line.color.rgb = _PPTX_COLOR_LINEA
+    tarjeta.line.width = Pt(0.75)
+    tarjeta.shadow.inherit = False
+
+    # Barra de acento pegada al borde izquierdo de la tarjeta.
+    _pptx_rectangulo(slide, left, top, Pt(4), height, _PPTX_COLOR_ACENTO)
+
+    margen_h = Inches(0.22)
+    margen_v = Inches(0.13)
+    marco = _pptx_caja_texto(
+        slide,
+        left + margen_h,
+        top + margen_v,
+        width - margen_h * 2,
+        height - margen_v * 2,
+        anclaje_vertical=MSO_ANCHOR.MIDDLE,
+    )
+
+    p_titulo = marco.paragraphs[0]
+    p_titulo.text = titulo
+    p_titulo.font.size = Pt(15)
+    p_titulo.font.bold = True
+    p_titulo.font.name = _PPTX_FUENTE
+    p_titulo.font.color.rgb = _PPTX_COLOR_TEXTO_OSCURO
+    p_titulo.space_after = Pt(3)
+
+    if detalle:
+        p_detalle = marco.add_paragraph()
+        p_detalle.text = detalle
+        p_detalle.font.size = Pt(12)
+        p_detalle.font.name = _PPTX_FUENTE
+        p_detalle.font.color.rgb = _PPTX_COLOR_TEXTO_SECUNDARIO
 
 
 def _config_pexels():
@@ -1618,6 +1679,31 @@ def _obtener_imagen_para_diapositiva(consulta, estilo):
     return _descargar_imagen_wikimedia(consulta)
 
 
+def obtener_imagenes_presentacion(contenido):
+    """Descarga, UNA sola vez, todas las imágenes que la IA ha pedido
+    para la portada y cada diapositiva, para poder reutilizar los
+    mismos bytes en el PPTX, el PDF y la vista previa sin repetir las
+    llamadas a Pexels/Wikimedia tres veces. Devuelve un dict:
+    {"portada": (bytes, estilo) | None, 0: (bytes, estilo) | None,
+    1: ..., ...} (las claves numéricas son el índice de cada
+    diapositiva en la lista "diapositivas")."""
+
+    cache = {}
+
+    estilo_portada = contenido.get("estilo_imagen_portada")
+    datos_portada = _obtener_imagen_para_diapositiva(
+        contenido.get("imagen_portada_query", ""), estilo_portada
+    )
+    cache["portada"] = (datos_portada, estilo_portada) if datos_portada else None
+
+    for indice, diapo in enumerate(contenido.get("diapositivas", [])):
+        estilo = diapo.get("estilo_imagen")
+        datos = _obtener_imagen_para_diapositiva(diapo.get("imagen_query", ""), estilo)
+        cache[indice] = (datos, estilo) if datos else None
+
+    return cache
+
+
 def _preparar_imagen_recortada(datos_bytes, ancho_caja, alto_caja):
     """Recorta una foto para que encaje EXACTAMENTE en una caja con la
     proporción ancho_caja:alto_caja, sin deformarla (se recortan los
@@ -1699,15 +1785,38 @@ def _pptx_imagen_contener(slide, datos_bytes, left, top, ancho_caja, alto_caja):
     return True
 
 
-def crear_pptx(contenido, ruta):
-    """Construye un archivo .pptx con un diseño propio (portada con
-    color de fondo, cabeceras de acento, viñetas de marca, numeración
-    y pie de página) a partir del contenido generado, y lo guarda en
-    `ruta`. Cuando la IA ha pedido imagen para la portada o para una
-    diapositiva, se busca una imagen real (no generada por IA, ver
-    `_obtener_imagen_para_diapositiva`) y se usa un diseño con foto;
-    si no hay imagen disponible, esa diapositiva usa el diseño de solo
-    texto de siempre."""
+def _normalizar_puntos(puntos_raw):
+    """Los puntos vienen como [{"titulo","detalle"}, ...]. Si el
+    modelo se despista y devuelve frases sueltas, las adapta al mismo
+    formato para que el resto del código no tenga que preocuparse."""
+
+    normalizados = []
+    for p in puntos_raw or []:
+        if isinstance(p, dict):
+            normalizados.append(
+                {
+                    "titulo": str(p.get("titulo", "")).strip(),
+                    "detalle": str(p.get("detalle", "")).strip(),
+                }
+            )
+        elif p:
+            normalizados.append({"titulo": str(p).strip(), "detalle": ""})
+
+    return [p for p in normalizados if p["titulo"]][:5]
+
+
+def crear_pptx(contenido, ruta, cache_imagenes=None):
+    """Construye un archivo .pptx con diseño de tarjetas -portada con
+    color/foto y categoría (kicker), cabecera con categoría + título,
+    una tarjeta por punto (título corto + detalle) y foto o diagrama
+    real cuando la IA lo ha pedido- y lo guarda en `ruta`.
+    `cache_imagenes` son los bytes ya descargados por
+    `obtener_imagenes_presentacion` (si no se pasa, se descargan
+    aquí mismo, pero lo normal es pasarlos para no repetir las
+    llamadas a Pexels/Wikimedia)."""
+
+    if cache_imagenes is None:
+        cache_imagenes = obtener_imagenes_presentacion(contenido)
 
     prs = Presentation()
     prs.slide_width = Inches(13.333)
@@ -1723,13 +1832,9 @@ def crear_pptx(contenido, ruta):
 
     slide = prs.slides.add_slide(layout_en_blanco)
 
-    imagen_portada = None
-    if contenido.get("estilo_imagen_portada") == "foto":
-        imagen_portada = _obtener_imagen_para_diapositiva(
-            contenido.get("imagen_portada_query", ""), "foto"
-        )
-
+    imagen_portada, _estilo_portada = cache_imagenes.get("portada") or (None, None)
     titulo_txt = str(contenido.get("titulo", ""))
+    categoria_portada = str(contenido.get("categoria_portada", "")).upper().strip()
 
     if imagen_portada:
         # Diseño con foto: panel oscuro a la izquierda con el texto,
@@ -1742,11 +1847,23 @@ def crear_pptx(contenido, ruta):
         _pptx_rectangulo(slide, 0, 0, ancho_panel, alto, _PPTX_COLOR_FONDO_OSCURO)
         _pptx_rectangulo(slide, 0, 0, Inches(0.18), alto, _PPTX_COLOR_ACENTO)
 
+        left_panel = Inches(0.8)
+        ancho_panel_texto = ancho_panel - Inches(1.4)
+        y = Inches(2.15)
+
+        if categoria_portada:
+            marco_cat = _pptx_caja_texto(slide, left_panel, y, ancho_panel_texto, Inches(0.4))
+            pc = marco_cat.paragraphs[0]
+            pc.text = categoria_portada
+            pc.font.size = Pt(12)
+            pc.font.bold = True
+            pc.font.name = _PPTX_FUENTE
+            pc.font.color.rgb = _PPTX_COLOR_ACENTO
+            y += Inches(0.45)
+
         tamano_titulo = Pt(36) if len(titulo_txt) <= 40 else Pt(27)
 
-        marco_titulo = _pptx_caja_texto(
-            slide, Inches(0.8), Inches(2.6), ancho_panel - Inches(1.4), Inches(1.8)
-        )
+        marco_titulo = _pptx_caja_texto(slide, left_panel, y, ancho_panel_texto, Inches(1.8))
         p = marco_titulo.paragraphs[0]
         p.text = titulo_txt
         p.font.size = tamano_titulo
@@ -1754,17 +1871,16 @@ def crear_pptx(contenido, ruta):
         p.font.name = _PPTX_FUENTE
         p.font.color.rgb = _PPTX_COLOR_TEXTO_CLARO
 
-        _pptx_rectangulo(
-            slide, Inches(0.8), Inches(4.05), Inches(1.1), Pt(4), _PPTX_COLOR_ACENTO
-        )
+        y += Inches(1.5) if tamano_titulo == Pt(36) else Inches(1.9)
+
+        _pptx_rectangulo(slide, left_panel, y, Inches(1.1), Pt(4), _PPTX_COLOR_ACENTO)
+        y += Inches(0.25)
 
         if contenido.get("subtitulo"):
-            marco_sub = _pptx_caja_texto(
-                slide, Inches(0.8), Inches(4.3), ancho_panel - Inches(1.4), Inches(2)
-            )
+            marco_sub = _pptx_caja_texto(slide, left_panel, y, ancho_panel_texto, Inches(2))
             ps = marco_sub.paragraphs[0]
             ps.text = str(contenido["subtitulo"])
-            ps.font.size = Pt(16)
+            ps.font.size = Pt(15)
             ps.font.name = _PPTX_FUENTE
             ps.font.color.rgb = _PPTX_COLOR_SUBTITULO_CLARO
 
@@ -1774,11 +1890,23 @@ def crear_pptx(contenido, ruta):
         _pptx_rectangulo(slide, 0, 0, ancho, alto, _PPTX_COLOR_FONDO_OSCURO)
         _pptx_rectangulo(slide, 0, 0, Inches(0.18), alto, _PPTX_COLOR_ACENTO)
 
+        left_full = Inches(1)
+        ancho_full = ancho - Inches(2)
+        y = Inches(2.2)
+
+        if categoria_portada:
+            marco_cat = _pptx_caja_texto(slide, left_full, y, ancho_full, Inches(0.4))
+            pc = marco_cat.paragraphs[0]
+            pc.text = categoria_portada
+            pc.font.size = Pt(13)
+            pc.font.bold = True
+            pc.font.name = _PPTX_FUENTE
+            pc.font.color.rgb = _PPTX_COLOR_ACENTO
+            y += Inches(0.5)
+
         tamano_titulo = Pt(44) if len(titulo_txt) <= 40 else Pt(32)
 
-        marco_titulo = _pptx_caja_texto(
-            slide, Inches(1), Inches(2.6), ancho - Inches(2), Inches(1.8)
-        )
+        marco_titulo = _pptx_caja_texto(slide, left_full, y, ancho_full, Inches(1.8))
         p = marco_titulo.paragraphs[0]
         p.text = titulo_txt
         p.font.size = tamano_titulo
@@ -1786,12 +1914,13 @@ def crear_pptx(contenido, ruta):
         p.font.name = _PPTX_FUENTE
         p.font.color.rgb = _PPTX_COLOR_TEXTO_CLARO
 
-        _pptx_rectangulo(slide, Inches(1), Inches(4.05), Inches(1.1), Pt(4), _PPTX_COLOR_ACENTO)
+        y += Inches(1.55) if tamano_titulo == Pt(44) else Inches(1.95)
+
+        _pptx_rectangulo(slide, left_full, y, Inches(1.1), Pt(4), _PPTX_COLOR_ACENTO)
+        y += Inches(0.25)
 
         if contenido.get("subtitulo"):
-            marco_sub = _pptx_caja_texto(
-                slide, Inches(1), Inches(4.3), ancho - Inches(2), Inches(1)
-            )
+            marco_sub = _pptx_caja_texto(slide, left_full, y, ancho_full, Inches(1))
             ps = marco_sub.paragraphs[0]
             ps.text = str(contenido["subtitulo"])
             ps.font.size = Pt(20)
@@ -1809,122 +1938,668 @@ def crear_pptx(contenido, ruta):
 
         slide = prs.slides.add_slide(layout_en_blanco)
 
-        # Cabecera oscura con barra de acento.
-        _pptx_rectangulo(slide, 0, 0, ancho, Inches(1.15), _PPTX_COLOR_FONDO_OSCURO)
-        _pptx_rectangulo(slide, 0, 0, Inches(0.18), Inches(1.15), _PPTX_COLOR_ACENTO)
+        # Fondo ligeramente gris para que las tarjetas blancas resalten.
+        _pptx_rectangulo(slide, 0, 0, ancho, alto, _PPTX_COLOR_FONDO_CLARO)
 
+        # Cabecera oscura con categoría (kicker) encima del título.
+        alto_cabecera = Inches(1.35)
+        _pptx_rectangulo(slide, 0, 0, ancho, alto_cabecera, _PPTX_COLOR_FONDO_OSCURO)
+        _pptx_rectangulo(slide, 0, 0, Inches(0.18), alto_cabecera, _PPTX_COLOR_ACENTO)
+
+        categoria = str(diapo.get("categoria", "")).upper().strip()
         titulo_diapo = str(diapo.get("titulo", ""))
-        tamano_titulo_diapo = Pt(26) if len(titulo_diapo) <= 45 else Pt(21)
+        tamano_titulo_diapo = Pt(24) if len(titulo_diapo) <= 45 else Pt(19)
 
-        marco_t = _pptx_caja_texto(
-            slide,
-            Inches(0.7),
-            Inches(0.15),
-            ancho - Inches(2.6),
-            Inches(0.9),
-            anclaje_vertical=MSO_ANCHOR.MIDDLE,
+        marco_cab = _pptx_caja_texto(
+            slide, Inches(0.7), Inches(0.16), ancho - Inches(2.6), Inches(1.05)
         )
-        pt_ = marco_t.paragraphs[0]
-        pt_.text = titulo_diapo
-        pt_.font.size = tamano_titulo_diapo
-        pt_.font.bold = True
-        pt_.font.name = _PPTX_FUENTE
-        pt_.font.color.rgb = _PPTX_COLOR_TEXTO_CLARO
+
+        if categoria:
+            p_cat = marco_cab.paragraphs[0]
+            p_cat.text = categoria
+            p_cat.font.size = Pt(11)
+            p_cat.font.bold = True
+            p_cat.font.name = _PPTX_FUENTE
+            p_cat.font.color.rgb = _PPTX_COLOR_ACENTO
+            p_cat.space_after = Pt(3)
+            p_titulo = marco_cab.add_paragraph()
+        else:
+            p_titulo = marco_cab.paragraphs[0]
+
+        p_titulo.text = titulo_diapo
+        p_titulo.font.size = tamano_titulo_diapo
+        p_titulo.font.bold = True
+        p_titulo.font.name = _PPTX_FUENTE
+        p_titulo.font.color.rgb = _PPTX_COLOR_TEXTO_CLARO
 
         # Numeración arriba a la derecha.
         marco_num = _pptx_caja_texto(
             slide,
             ancho - Inches(1.8),
-            Inches(0.15),
+            Inches(0.16),
             Inches(1.3),
-            Inches(0.9),
+            alto_cabecera - Inches(0.16),
             anclaje_vertical=MSO_ANCHOR.MIDDLE,
         )
         pn = marco_num.paragraphs[0]
         pn.text = f"{numero:02d} / {total:02d}"
         pn.alignment = PP_ALIGN.RIGHT
-        pn.font.size = Pt(13)
+        pn.font.size = Pt(12)
         pn.font.name = _PPTX_FUENTE
         pn.font.color.rgb = _PPTX_COLOR_SUBTITULO_CLARO
 
         # Imagen real (si la IA la ha pedido y se ha encontrado):
-        # la diapositiva pasa a un diseño a dos columnas, con la
-        # imagen ocupando la mitad derecha.
-        estilo_imagen = diapo.get("estilo_imagen")
-        imagen_diapo = _obtener_imagen_para_diapositiva(
-            diapo.get("imagen_query", ""), estilo_imagen
-        )
+        # la diapositiva pasa a un diseño a dos columnas, con las
+        # tarjetas a la izquierda y la imagen a la derecha.
+        imagen_diapo, estilo_imagen = cache_imagenes.get(numero - 1) or (None, None)
+
+        margen_izq = Inches(0.7)
+        margen_der = Inches(0.7)
+        top_cuerpo = alto_cabecera + Inches(0.3)
+        alto_cuerpo = alto - top_cuerpo - Inches(0.45)
 
         if imagen_diapo:
-            margen_izq = Inches(0.9)
-            margen_der = Inches(0.7)
-            hueco = Inches(0.5)
+            hueco = Inches(0.4)
             espacio_total = ancho - margen_izq - margen_der - hueco
 
-            ancho_texto = int(espacio_total * 0.5)
-            ancho_imagen = espacio_total - ancho_texto
-            left_imagen = margen_izq + ancho_texto + hueco
-            top_imagen = Inches(1.55)
-            alto_imagen = alto - Inches(2.35)
+            ancho_tarjetas = int(espacio_total * 0.52)
+            ancho_imagen = espacio_total - ancho_tarjetas
+            left_imagen = margen_izq + ancho_tarjetas + hueco
 
             if estilo_imagen == "foto":
                 _pptx_imagen_cubrir(
-                    slide, imagen_diapo, left_imagen, top_imagen, ancho_imagen, alto_imagen
+                    slide, imagen_diapo, left_imagen, top_cuerpo, ancho_imagen, alto_cuerpo
                 )
             else:
                 # Diagrama/ilustración: se ajusta sin recortar para no
-                # perder etiquetas ni detalles, sobre un fondo claro.
+                # perder etiquetas ni detalles, sobre un fondo blanco.
                 _pptx_rectangulo(
-                    slide, left_imagen, top_imagen, ancho_imagen, alto_imagen,
-                    RGBColor(0xF5, 0xF5, 0xF8),
+                    slide, left_imagen, top_cuerpo, ancho_imagen, alto_cuerpo,
+                    _PPTX_COLOR_TARJETA_FONDO,
                 )
                 _pptx_imagen_contener(
-                    slide, imagen_diapo, left_imagen, top_imagen, ancho_imagen, alto_imagen
+                    slide, imagen_diapo, left_imagen, top_cuerpo, ancho_imagen, alto_cuerpo
                 )
 
-            ancho_cuerpo = ancho_texto
+            ancho_tarjeta_final = ancho_tarjetas
         else:
-            ancho_cuerpo = ancho - Inches(1.8)
+            ancho_tarjeta_final = ancho - margen_izq - margen_der
 
-        # Cuerpo con los puntos, con viñeta coloreada en el acento.
-        puntos = diapo.get("puntos") or []
-        tamano_puntos = Pt(19) if len(puntos) <= 5 else Pt(16)
+        # Tarjetas de los puntos, apiladas en la columna de texto.
+        puntos = _normalizar_puntos(diapo.get("puntos"))
 
-        marco_cuerpo = _pptx_caja_texto(
-            slide, Inches(0.9), Inches(1.7), ancho_cuerpo, alto - Inches(2.5)
-        )
+        if puntos:
+            n = len(puntos)
+            gap = Inches(0.16)
+            alto_tarjeta = (alto_cuerpo - gap * (n - 1)) / n
 
-        for indice, punto in enumerate(puntos):
-            parrafo = marco_cuerpo.paragraphs[0] if indice == 0 else marco_cuerpo.add_paragraph()
-            parrafo.space_after = Pt(14)
+            # Si hay pocos puntos, las tarjetas no crecen sin límite:
+            # se quedan a un tamaño cómodo y el bloque se centra en
+            # el espacio disponible, en vez de dejar tarjetas enormes
+            # con mucho hueco vacío debajo del texto.
+            alto_maxima = Inches(1.85)
+            if alto_tarjeta > alto_maxima:
+                alto_tarjeta = alto_maxima
 
-            marca = parrafo.add_run()
-            marca.text = "●  "
-            marca.font.size = tamano_puntos
-            marca.font.name = _PPTX_FUENTE
-            marca.font.color.rgb = _PPTX_COLOR_ACENTO
+            alto_total = alto_tarjeta * n + gap * (n - 1)
+            y_tarjeta = top_cuerpo + max(0, int((alto_cuerpo - alto_total) / 2))
+            for punto in puntos:
+                _pptx_tarjeta_punto(
+                    slide,
+                    margen_izq,
+                    y_tarjeta,
+                    ancho_tarjeta_final,
+                    alto_tarjeta,
+                    punto["titulo"],
+                    punto["detalle"],
+                )
+                y_tarjeta += alto_tarjeta + gap
 
-            texto_run = parrafo.add_run()
-            texto_run.text = str(punto)
-            texto_run.font.size = tamano_puntos
-            texto_run.font.name = _PPTX_FUENTE
-            texto_run.font.color.rgb = _PPTX_COLOR_TEXTO_OSCURO
-
-        # Línea divisoria y marca de pie de página.
-        _pptx_rectangulo(
-            slide, Inches(0.7), alto - Inches(0.7), ancho - Inches(1.4), Pt(1), _PPTX_COLOR_LINEA
-        )
+        # Marca de pie de página.
         marco_pie = _pptx_caja_texto(
-            slide, Inches(0.7), alto - Inches(0.6), Inches(3), Inches(0.4)
+            slide, margen_izq, alto - Inches(0.38), Inches(3), Inches(0.32)
         )
         pp_ = marco_pie.paragraphs[0]
         pp_.text = "ORIA"
-        pp_.font.size = Pt(11)
+        pp_.font.size = Pt(10)
         pp_.font.bold = True
         pp_.font.name = _PPTX_FUENTE
         pp_.font.color.rgb = _PPTX_COLOR_TEXTO_SECUNDARIO
 
     prs.save(ruta)
+
+
+# --------------------------------------------------------------------
+# Exportación a PDF (mismo diseño que crear_pptx, dibujado con reportlab
+# en vez de LibreOffice/Chromium para no arriesgar el despliegue
+# gratuito en Streamlit Cloud con dependencias de sistema pesadas).
+# --------------------------------------------------------------------
+
+_PDF_COLOR_FONDO_OSCURO = _pdf_color("#1B1B2A")
+_PDF_COLOR_ACENTO = _pdf_color("#6C5CE7")
+_PDF_COLOR_TEXTO_OSCURO = _pdf_color("#2B2B31")
+_PDF_COLOR_TEXTO_CLARO = _pdf_color("#FFFFFF")
+_PDF_COLOR_TEXTO_SECUNDARIO = _pdf_color("#8A8A96")
+_PDF_COLOR_SUBTITULO_CLARO = _pdf_color("#C9C9DC")
+_PDF_COLOR_LINEA = _pdf_color("#E3E3E8")
+_PDF_COLOR_FONDO_CLARO = _pdf_color("#F6F6FA")
+_PDF_COLOR_TARJETA_FONDO = _pdf_color("#FFFFFF")
+
+_PDF_FUENTE = "Helvetica"
+_PDF_FUENTE_NEGRITA = "Helvetica-Bold"
+
+_PDF_ANCHO = 13.333 * _PDF_INCH
+_PDF_ALTO = 7.5 * _PDF_INCH
+
+
+def _pdf_ajustar_texto(texto, fuente, tamano, ancho_max):
+    """Parte `texto` en líneas que caben en `ancho_max` puntos con esa
+    fuente y tamaño (envoltura de palabras, equivalente al ajuste de
+    línea automático que ya hace PowerPoint en crear_pptx)."""
+
+    palabras = str(texto or "").split()
+    lineas = []
+    actual = ""
+    for palabra in palabras:
+        prueba = (actual + " " + palabra).strip()
+        if not actual or stringWidth(prueba, fuente, tamano) <= ancho_max:
+            actual = prueba
+        else:
+            lineas.append(actual)
+            actual = palabra
+    if actual:
+        lineas.append(actual)
+    return lineas
+
+
+def _pdf_rect(c, x, top, ancho, alto, color, radio=None):
+    """Dibuja un rectángulo (opcionalmente con esquinas redondeadas)
+    usando coordenadas 'desde arriba' como en python-pptx, para no
+    tener que pensar en el sistema de coordenadas de reportlab
+    (origen abajo a la izquierda) en el resto de la función."""
+
+    c.setFillColor(color)
+    y = _PDF_ALTO - top - alto
+    if radio:
+        c.roundRect(x, y, ancho, alto, radio, fill=1, stroke=0)
+    else:
+        c.rect(x, y, ancho, alto, fill=1, stroke=0)
+
+
+def _pdf_texto(c, x, top, texto, fuente, tamano, color, ancho_max=None,
+               max_lineas=None, interlineado=None, alineacion="izq"):
+    """Dibuja texto (envuelto en varias líneas si se da `ancho_max`)
+    empezando en `top` (distancia desde arriba de la página) y
+    devuelve el `top` justo debajo del bloque escrito."""
+
+    interlineado = interlineado or tamano * 1.28
+    if ancho_max:
+        lineas = _pdf_ajustar_texto(texto, fuente, tamano, ancho_max)
+    else:
+        lineas = [str(texto or "")]
+    if max_lineas:
+        lineas = lineas[:max_lineas]
+
+    c.setFont(fuente, tamano)
+    c.setFillColor(color)
+    y_cursor = top
+    for linea in lineas:
+        baseline = _PDF_ALTO - y_cursor - tamano
+        if alineacion == "der" and ancho_max:
+            c.drawRightString(x + ancho_max, baseline, linea)
+        else:
+            c.drawString(x, baseline, linea)
+        y_cursor += interlineado
+    return y_cursor
+
+
+def _pdf_medida_imagen_contener(datos_bytes, ancho_caja, alto_caja):
+    """Calcula el tamaño con el que debe dibujarse una imagen para que
+    quepa entera dentro de la caja sin recortarla (misma lógica que
+    _pptx_imagen_contener, para diagramas/ilustraciones)."""
+
+    imagen = Image.open(io.BytesIO(datos_bytes))
+    ancho_img, alto_img = imagen.size
+    ratio_caja = ancho_caja / alto_caja
+    ratio_img = ancho_img / alto_img
+    if ratio_img > ratio_caja:
+        ancho_dibujo = ancho_caja
+        alto_dibujo = ancho_caja / ratio_img
+    else:
+        alto_dibujo = alto_caja
+        ancho_dibujo = alto_caja * ratio_img
+    return ancho_dibujo, alto_dibujo
+
+
+def _pdf_imagen_cubrir(c, datos_bytes, left, top, ancho_caja, alto_caja):
+    """Recorta (con PIL, reutilizando el mismo helper que usa el pptx)
+    y dibuja una foto rellenando toda la caja, sin dejar huecos."""
+
+    try:
+        recortada = _preparar_imagen_recortada(datos_bytes, ancho_caja, alto_caja)
+        y = _PDF_ALTO - top - alto_caja
+        c.drawImage(
+            ImageReader(recortada), left, y, width=ancho_caja, height=alto_caja,
+            preserveAspectRatio=False, mask="auto",
+        )
+    except Exception:
+        pass
+
+
+def _pdf_imagen_contener(c, datos_bytes, left, top, ancho_caja, alto_caja):
+    """Dibuja un diagrama/ilustración ajustado dentro de la caja sin
+    recortar, centrado, sobre el fondo blanco que ya se ha pintado."""
+
+    try:
+        ancho_dibujo, alto_dibujo = _pdf_medida_imagen_contener(
+            datos_bytes, ancho_caja, alto_caja
+        )
+        left_img = left + (ancho_caja - ancho_dibujo) / 2
+        top_img = top + (alto_caja - alto_dibujo) / 2
+        y = _PDF_ALTO - top_img - alto_dibujo
+        c.drawImage(
+            ImageReader(io.BytesIO(datos_bytes)), left_img, y,
+            width=ancho_dibujo, height=alto_dibujo,
+            preserveAspectRatio=True, mask="auto",
+        )
+    except Exception:
+        pass
+
+
+def _pdf_tarjeta_punto(c, left, top, width, height, titulo, detalle):
+    """Dibuja la misma 'tarjeta' de crear_pptx (fondo blanco, esquinas
+    redondeadas, barra de acento a la izquierda, título en negrita y
+    detalle debajo) pero con reportlab."""
+
+    c.setFillColor(_PDF_COLOR_TARJETA_FONDO)
+    c.setStrokeColor(_PDF_COLOR_LINEA)
+    c.setLineWidth(0.75)
+    y = _PDF_ALTO - top - height
+    radio = min(height, width) * 0.07
+    c.roundRect(left, y, width, height, radio, fill=1, stroke=1)
+
+    _pdf_rect(c, left, top, 4, height, _PDF_COLOR_ACENTO)
+
+    margen_h = 0.22 * _PDF_INCH
+    margen_v = 0.15 * _PDF_INCH
+    ancho_texto = width - margen_h * 2
+
+    lineas_titulo = _pdf_ajustar_texto(titulo, _PDF_FUENTE_NEGRITA, 15, ancho_texto)
+    lineas_detalle = (
+        _pdf_ajustar_texto(detalle, _PDF_FUENTE, 12, ancho_texto) if detalle else []
+    )
+
+    alto_bloque = len(lineas_titulo) * 15 * 1.22 + (3 if lineas_detalle else 0) \
+        + len(lineas_detalle) * 12 * 1.28
+    top_texto = top + max(margen_v, (height - alto_bloque) / 2)
+
+    top_texto = _pdf_texto(
+        c, left + margen_h, top_texto, titulo, _PDF_FUENTE_NEGRITA, 15,
+        _PDF_COLOR_TEXTO_OSCURO, ancho_max=ancho_texto, interlineado=15 * 1.22,
+    )
+    if detalle:
+        top_texto += 3
+        _pdf_texto(
+            c, left + margen_h, top_texto, detalle, _PDF_FUENTE, 12,
+            _PDF_COLOR_TEXTO_SECUNDARIO, ancho_max=ancho_texto, interlineado=12 * 1.28,
+        )
+
+
+def crear_pdf(contenido, ruta, cache_imagenes=None):
+    """Genera un PDF con exactamente el mismo diseño que crear_pptx
+    (portada con foto/color y kicker, diapositivas con tarjetas), para
+    que el usuario pueda elegir el formato de descarga que prefiera."""
+
+    if cache_imagenes is None:
+        cache_imagenes = obtener_imagenes_presentacion(contenido)
+
+    c = _pdf_canvas.Canvas(ruta, pagesize=(_PDF_ANCHO, _PDF_ALTO))
+
+    # --------------------------------------------
+    # Portada
+    # --------------------------------------------
+
+    imagen_portada, _estilo_portada = cache_imagenes.get("portada") or (None, None)
+    titulo_txt = str(contenido.get("titulo", ""))
+    categoria_portada = str(contenido.get("categoria_portada", "")).upper().strip()
+
+    if imagen_portada:
+        ancho_panel = _PDF_ANCHO * 0.4
+        _pdf_imagen_cubrir(c, imagen_portada, ancho_panel, 0, _PDF_ANCHO - ancho_panel, _PDF_ALTO)
+        _pdf_rect(c, 0, 0, ancho_panel, _PDF_ALTO, _PDF_COLOR_FONDO_OSCURO)
+        _pdf_rect(c, 0, 0, 0.18 * _PDF_INCH, _PDF_ALTO, _PDF_COLOR_ACENTO)
+
+        left_panel = 0.8 * _PDF_INCH
+        ancho_panel_texto = ancho_panel - 1.4 * _PDF_INCH
+        y = 2.15 * _PDF_INCH
+
+        if categoria_portada:
+            y = _pdf_texto(c, left_panel, y, categoria_portada, _PDF_FUENTE_NEGRITA, 12,
+                            _PDF_COLOR_ACENTO, ancho_max=ancho_panel_texto)
+            y += 0.15 * _PDF_INCH
+
+        tamano_titulo = 36 if len(titulo_txt) <= 40 else 27
+        y = _pdf_texto(c, left_panel, y, titulo_txt, _PDF_FUENTE_NEGRITA, tamano_titulo,
+                        _PDF_COLOR_TEXTO_CLARO, ancho_max=ancho_panel_texto,
+                        interlineado=tamano_titulo * 1.18, max_lineas=3)
+        y += 0.2 * _PDF_INCH
+
+        _pdf_rect(c, left_panel, y, 1.1 * _PDF_INCH, 4, _PDF_COLOR_ACENTO)
+        y += 0.3 * _PDF_INCH
+
+        if contenido.get("subtitulo"):
+            _pdf_texto(c, left_panel, y, str(contenido["subtitulo"]), _PDF_FUENTE, 15,
+                        _PDF_COLOR_SUBTITULO_CLARO, ancho_max=ancho_panel_texto, max_lineas=3)
+    else:
+        _pdf_rect(c, 0, 0, _PDF_ANCHO, _PDF_ALTO, _PDF_COLOR_FONDO_OSCURO)
+        _pdf_rect(c, 0, 0, 0.18 * _PDF_INCH, _PDF_ALTO, _PDF_COLOR_ACENTO)
+
+        left_full = 1 * _PDF_INCH
+        ancho_full = _PDF_ANCHO - 2 * _PDF_INCH
+        y = 2.2 * _PDF_INCH
+
+        if categoria_portada:
+            y = _pdf_texto(c, left_full, y, categoria_portada, _PDF_FUENTE_NEGRITA, 13,
+                            _PDF_COLOR_ACENTO, ancho_max=ancho_full)
+            y += 0.2 * _PDF_INCH
+
+        tamano_titulo = 44 if len(titulo_txt) <= 40 else 32
+        y = _pdf_texto(c, left_full, y, titulo_txt, _PDF_FUENTE_NEGRITA, tamano_titulo,
+                        _PDF_COLOR_TEXTO_CLARO, ancho_max=ancho_full,
+                        interlineado=tamano_titulo * 1.18, max_lineas=3)
+        y += 0.2 * _PDF_INCH
+
+        _pdf_rect(c, left_full, y, 1.1 * _PDF_INCH, 4, _PDF_COLOR_ACENTO)
+        y += 0.3 * _PDF_INCH
+
+        if contenido.get("subtitulo"):
+            _pdf_texto(c, left_full, y, str(contenido["subtitulo"]), _PDF_FUENTE, 20,
+                        _PDF_COLOR_SUBTITULO_CLARO, ancho_max=ancho_full, max_lineas=2)
+
+    # --------------------------------------------
+    # Diapositivas de contenido
+    # --------------------------------------------
+
+    diapositivas = contenido.get("diapositivas", [])
+    total = len(diapositivas)
+
+    for numero, diapo in enumerate(diapositivas, start=1):
+        c.showPage()
+
+        _pdf_rect(c, 0, 0, _PDF_ANCHO, _PDF_ALTO, _PDF_COLOR_FONDO_CLARO)
+
+        alto_cabecera = 1.35 * _PDF_INCH
+        _pdf_rect(c, 0, 0, _PDF_ANCHO, alto_cabecera, _PDF_COLOR_FONDO_OSCURO)
+        _pdf_rect(c, 0, 0, 0.18 * _PDF_INCH, alto_cabecera, _PDF_COLOR_ACENTO)
+
+        categoria = str(diapo.get("categoria", "")).upper().strip()
+        titulo_diapo = str(diapo.get("titulo", ""))
+        tamano_titulo_diapo = 24 if len(titulo_diapo) <= 45 else 19
+
+        ancho_cabecera_texto = _PDF_ANCHO - 2.6 * _PDF_INCH
+        y_cab = 0.2 * _PDF_INCH
+        if categoria:
+            y_cab = _pdf_texto(c, 0.7 * _PDF_INCH, y_cab, categoria, _PDF_FUENTE_NEGRITA, 11,
+                                _PDF_COLOR_ACENTO, ancho_max=ancho_cabecera_texto)
+            y_cab += 0.05 * _PDF_INCH
+        _pdf_texto(c, 0.7 * _PDF_INCH, y_cab, titulo_diapo, _PDF_FUENTE_NEGRITA,
+                   tamano_titulo_diapo, _PDF_COLOR_TEXTO_CLARO,
+                   ancho_max=ancho_cabecera_texto, max_lineas=2,
+                   interlineado=tamano_titulo_diapo * 1.15)
+
+        c.setFont(_PDF_FUENTE, 12)
+        c.setFillColor(_PDF_COLOR_SUBTITULO_CLARO)
+        c.drawRightString(_PDF_ANCHO - 0.7 * _PDF_INCH, _PDF_ALTO - 0.16 * _PDF_INCH - 12,
+                           f"{numero:02d} / {total:02d}")
+
+        imagen_diapo, estilo_imagen = cache_imagenes.get(numero - 1) or (None, None)
+
+        margen_izq = 0.7 * _PDF_INCH
+        margen_der = 0.7 * _PDF_INCH
+        top_cuerpo = alto_cabecera + 0.3 * _PDF_INCH
+        alto_cuerpo = _PDF_ALTO - top_cuerpo - 0.45 * _PDF_INCH
+
+        if imagen_diapo:
+            hueco = 0.4 * _PDF_INCH
+            espacio_total = _PDF_ANCHO - margen_izq - margen_der - hueco
+            ancho_tarjetas = espacio_total * 0.52
+            ancho_imagen = espacio_total - ancho_tarjetas
+            left_imagen = margen_izq + ancho_tarjetas + hueco
+
+            if estilo_imagen == "foto":
+                _pdf_imagen_cubrir(c, imagen_diapo, left_imagen, top_cuerpo, ancho_imagen, alto_cuerpo)
+            else:
+                _pdf_rect(c, left_imagen, top_cuerpo, ancho_imagen, alto_cuerpo, _PDF_COLOR_TARJETA_FONDO)
+                _pdf_imagen_contener(c, imagen_diapo, left_imagen, top_cuerpo, ancho_imagen, alto_cuerpo)
+
+            ancho_tarjeta_final = ancho_tarjetas
+        else:
+            ancho_tarjeta_final = _PDF_ANCHO - margen_izq - margen_der
+
+        puntos = _normalizar_puntos(diapo.get("puntos"))
+
+        if puntos:
+            n = len(puntos)
+            gap = 0.16 * _PDF_INCH
+            alto_tarjeta = (alto_cuerpo - gap * (n - 1)) / n
+            alto_maxima = 1.85 * _PDF_INCH
+            if alto_tarjeta > alto_maxima:
+                alto_tarjeta = alto_maxima
+            alto_total = alto_tarjeta * n + gap * (n - 1)
+            y_tarjeta = top_cuerpo + max(0, (alto_cuerpo - alto_total) / 2)
+            for punto in puntos:
+                _pdf_tarjeta_punto(
+                    c, margen_izq, y_tarjeta, ancho_tarjeta_final, alto_tarjeta,
+                    punto["titulo"], punto["detalle"],
+                )
+                y_tarjeta += alto_tarjeta + gap
+
+        c.setFont(_PDF_FUENTE_NEGRITA, 10)
+        c.setFillColor(_PDF_COLOR_TEXTO_SECUNDARIO)
+        c.drawString(margen_izq, 0.28 * _PDF_INCH, "ORIA")
+
+    c.save()
+
+
+# --------------------------------------------------------------------
+# Vista previa HTML de la presentación (para verla en el chat antes de
+# descargarla, con el mismo diseño de tarjetas que crear_pptx/crear_pdf
+# y botones de anterior/siguiente, sin depender de nada externo).
+# --------------------------------------------------------------------
+
+def _imagen_a_data_uri(datos_bytes):
+    """Convierte los bytes de una imagen ya descargada en un data-URI
+    JPEG listo para incrustar directamente en el HTML (sin subir nada
+    a ningún sitio, todo queda dentro de la propia vista previa)."""
+
+    if not datos_bytes:
+        return None
+    try:
+        imagen = Image.open(io.BytesIO(datos_bytes))
+        if imagen.mode != "RGB":
+            imagen = imagen.convert("RGB")
+        buffer = io.BytesIO()
+        imagen.save(buffer, format="JPEG", quality=82)
+        codificado = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/jpeg;base64,{codificado}"
+    except Exception:
+        return None
+
+
+def generar_html_presentacion(contenido, cache_imagenes):
+    """Genera una vista previa HTML autocontenida (portada + tarjetas,
+    igual que en el .pptx/.pdf) con navegación anterior/siguiente, para
+    que el usuario pueda verla en el chat antes de descargarla."""
+
+    titulo_txt = html.escape(str(contenido.get("titulo", "")))
+    subtitulo_txt = html.escape(str(contenido.get("subtitulo", "")))
+    categoria_portada = html.escape(
+        str(contenido.get("categoria_portada", "")).upper().strip()
+    )
+    diapositivas = contenido.get("diapositivas", [])
+    total_diapos = len(diapositivas) + 1
+
+    imagen_portada, _estilo_portada = cache_imagenes.get("portada") or (None, None)
+    uri_portada = _imagen_a_data_uri(imagen_portada)
+
+    if uri_portada:
+        bloque_portada = f"""
+        <div class="oria-slide oria-cover-foto" data-i="0">
+          <div class="oria-panel">
+            {f'<div class="oria-kicker">{categoria_portada}</div>' if categoria_portada else ''}
+            <div class="oria-titulo-portada">{titulo_txt}</div>
+            <div class="oria-barra"></div>
+            {f'<div class="oria-subtitulo">{subtitulo_txt}</div>' if subtitulo_txt else ''}
+          </div>
+          <div class="oria-foto-portada" style="background-image:url('{uri_portada}')"></div>
+        </div>"""
+    else:
+        bloque_portada = f"""
+        <div class="oria-slide oria-cover-solido" data-i="0">
+          {f'<div class="oria-kicker">{categoria_portada}</div>' if categoria_portada else ''}
+          <div class="oria-titulo-portada-solido">{titulo_txt}</div>
+          <div class="oria-barra"></div>
+          {f'<div class="oria-subtitulo-solido">{subtitulo_txt}</div>' if subtitulo_txt else ''}
+        </div>"""
+
+    partes = [bloque_portada]
+
+    for idx, diapo in enumerate(diapositivas, start=1):
+        categoria = html.escape(str(diapo.get("categoria", "")).upper().strip())
+        titulo_diapo = html.escape(str(diapo.get("titulo", "")))
+        puntos = _normalizar_puntos(diapo.get("puntos"))
+        imagen_diapo, estilo_imagen = cache_imagenes.get(idx - 1) or (None, None)
+        uri_imagen = _imagen_a_data_uri(imagen_diapo)
+
+        tarjetas_html = "".join(
+            f"""<div class="oria-tarjeta">
+                  <div class="oria-tarjeta-titulo">{html.escape(p['titulo'])}</div>
+                  {f'<div class="oria-tarjeta-detalle">{html.escape(p["detalle"])}</div>' if p['detalle'] else ''}
+                </div>"""
+            for p in puntos
+        )
+
+        if uri_imagen:
+            clase_fit = "oria-img-cubrir" if estilo_imagen == "foto" else "oria-img-contener"
+            columna_imagen = f"""<div class="oria-col-imagen {clase_fit}">
+                  <img src="{uri_imagen}" alt="" />
+                </div>"""
+            clase_cuerpo = "oria-cuerpo-con-imagen"
+        else:
+            columna_imagen = ""
+            clase_cuerpo = "oria-cuerpo-sin-imagen"
+
+        partes.append(f"""
+        <div class="oria-slide oria-contenido" data-i="{idx}">
+          <div class="oria-cabecera">
+            <div class="oria-cabecera-texto">
+              {f'<div class="oria-kicker-chico">{categoria}</div>' if categoria else ''}
+              <div class="oria-titulo-diapo">{titulo_diapo}</div>
+            </div>
+            <div class="oria-numero">{idx:02d} / {len(diapositivas):02d}</div>
+          </div>
+          <div class="oria-cuerpo {clase_cuerpo}">
+            <div class="oria-col-tarjetas">{tarjetas_html}</div>
+            {columna_imagen}
+          </div>
+          <div class="oria-pie">ORIA</div>
+        </div>""")
+
+    slides_html = "".join(partes)
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  * {{ box-sizing: border-box; }}
+  html, body {{ margin:0; padding:0; background:transparent;
+        font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }}
+  #oria-wrap {{ width:100%; max-width:920px; margin:0 auto; }}
+  #oria-marco {{ position:relative; width:100%; aspect-ratio: 13.333 / 7.5;
+        background:#fff; border-radius:12px; overflow:hidden;
+        box-shadow:0 8px 30px rgba(0,0,0,0.18); }}
+  .oria-slide {{ position:absolute; inset:0; display:none; }}
+  .oria-slide.oria-activa {{ display:flex; flex-direction:column; }}
+  .oria-slide.oria-cover-foto.oria-activa {{ flex-direction:row; }}
+  .oria-cover-solido {{ background:#1B1B2A; padding: 8% 6%; justify-content:center; }}
+  .oria-cover-solido::before {{ content:""; position:absolute; left:0; top:0;
+        bottom:0; width:6px; background:#6C5CE7; }}
+  .oria-panel {{ width:40%; height:100%; background:#1B1B2A; padding: 7% 6%;
+        position:relative; display:flex; flex-direction:column; justify-content:center; }}
+  .oria-panel::before {{ content:""; position:absolute; left:0; top:0; bottom:0;
+        width:6px; background:#6C5CE7; }}
+  .oria-foto-portada {{ width:60%; height:100%; background-size:cover;
+        background-position:center; }}
+  .oria-kicker {{ color:#6C5CE7; font-weight:700; font-size: clamp(9px,1.3vw,14px);
+        letter-spacing:0.5px; margin-bottom: 6%; }}
+  .oria-titulo-portada, .oria-titulo-portada-solido {{ color:#fff; font-weight:800;
+        line-height:1.18; font-size: clamp(16px, 2.6vw, 32px); margin-bottom:5%; }}
+  .oria-barra {{ width: 46px; height:4px; background:#6C5CE7; margin-bottom: 5%; }}
+  .oria-subtitulo, .oria-subtitulo-solido {{ color:#C9C9DC; font-size: clamp(10px,1.15vw,15px);
+        line-height:1.4; }}
+  .oria-contenido {{ background:#F6F6FA; }}
+  .oria-cabecera {{ background:#1B1B2A; position:relative; padding: 2.2% 3%;
+        display:flex; justify-content:space-between; align-items:flex-start; }}
+  .oria-cabecera::before {{ content:""; position:absolute; left:0; top:0; bottom:0;
+        width:6px; background:#6C5CE7; }}
+  .oria-kicker-chico {{ color:#6C5CE7; font-weight:700; font-size: clamp(8px,1vw,12px);
+        letter-spacing:0.5px; margin-bottom:3%; }}
+  .oria-titulo-diapo {{ color:#fff; font-weight:800; font-size: clamp(13px,1.7vw,22px);
+        line-height:1.2; }}
+  .oria-numero {{ color:#C9C9DC; font-size: clamp(9px,1vw,13px); white-space:nowrap;
+        padding-top:2px; }}
+  .oria-cuerpo {{ flex:1; display:flex; gap: 2%; padding: 2.6% 3%; overflow:hidden; min-height:0; }}
+  .oria-col-tarjetas {{ flex:1; display:flex; flex-direction:column; gap: 2.4%;
+        justify-content:center; min-width:0; }}
+  .oria-cuerpo-con-imagen .oria-col-tarjetas {{ flex: 0 0 52%; }}
+  .oria-col-imagen {{ flex:1; border-radius:6px; overflow:hidden; background:#fff; }}
+  .oria-col-imagen img {{ width:100%; height:100%; display:block; }}
+  .oria-img-cubrir img {{ object-fit:cover; }}
+  .oria-img-contener img {{ object-fit:contain; }}
+  .oria-tarjeta {{ background:#fff; border:1px solid #E3E3E8; border-left:4px solid #6C5CE7;
+        border-radius:8px; padding: 3% 3.5%; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }}
+  .oria-tarjeta-titulo {{ color:#2B2B31; font-weight:700; font-size: clamp(9px,1.05vw,14px);
+        margin-bottom:2%; }}
+  .oria-tarjeta-detalle {{ color:#8A8A96; font-size: clamp(8px,0.9vw,12px); line-height:1.35; }}
+  .oria-pie {{ position:absolute; bottom: 2%; left: 3%; color:#8A8A96; font-weight:700;
+        font-size: clamp(7px,0.75vw,10px); }}
+  #oria-nav {{ display:flex; align-items:center; justify-content:center; gap:14px; margin-top:12px; }}
+  #oria-nav button {{ background:#1B1B2A; color:#fff; border:none; border-radius:6px;
+        width:34px; height:34px; font-size:16px; cursor:pointer; display:flex;
+        align-items:center; justify-content:center; }}
+  #oria-nav button:disabled {{ opacity:0.35; cursor:default; }}
+  #oria-nav button:hover:not(:disabled) {{ background:#6C5CE7; }}
+  #oria-contador {{ color:#444; font-size:13px; min-width:90px; text-align:center; }}
+</style></head>
+<body>
+  <div id="oria-wrap">
+    <div id="oria-marco">{slides_html}</div>
+    <div id="oria-nav">
+      <button id="oria-btn-prev" onclick="oriaIr(-1)">&#8249;</button>
+      <span id="oria-contador"></span>
+      <button id="oria-btn-next" onclick="oriaIr(1)">&#8250;</button>
+    </div>
+  </div>
+<script>
+(function() {{
+  var total = {total_diapos};
+  var actual = 0;
+  var slides = document.querySelectorAll('#oria-marco .oria-slide');
+  function render() {{
+    slides.forEach(function(s, i) {{
+      s.classList.toggle('oria-activa', i === actual);
+    }});
+    document.getElementById('oria-contador').textContent = (actual + 1) + ' / ' + total;
+    document.getElementById('oria-btn-prev').disabled = actual === 0;
+    document.getElementById('oria-btn-next').disabled = actual === total - 1;
+  }}
+  window.oriaIr = function(delta) {{
+    actual = Math.max(0, Math.min(total - 1, actual + delta));
+    render();
+  }};
+  render();
+}})();
+</script>
+</body></html>"""
 
 
 def transcribir_audio(audio_bytes, nombre_archivo="grabacion.wav"):
@@ -2112,6 +2787,181 @@ def formatear_contexto_web(resultados):
         bloques.append(f"[{i}] {r['titulo']} ({r['url']})\n{r['texto']}")
 
     return "\n\n".join(bloques)
+
+
+# ============================================================
+# 5C. DETECCIÓN AUTOMÁTICA DE INTENCIÓN (sin botones)
+# ============================================================
+
+# Herramientas que la IA puede "llamar" ella sola, según lo que haya
+# escrito el usuario, en vez de que el usuario tenga que activar un
+# interruptor a mano. Esto es lo que se llama "tool calling"/"function
+# calling": le describimos a la IA qué acciones existen, y ella decide
+# cuál (si alguna) encaja con el mensaje.
+_HERRAMIENTAS_INTENCION = [
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_imagen",
+            "description": (
+                "Úsala cuando el usuario pide explícitamente que se "
+                "dibuje, genere, cree o haga una imagen, foto, dibujo "
+                "o ilustración de algo. No la uses si solo está "
+                "hablando de imágenes en general, o si ha adjuntado "
+                "él mismo una imagen o un PDF."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "descripcion": {
+                        "type": "string",
+                        "description": (
+                            "Qué imagen hay que generar, limpia de "
+                            "frases como 'hazme una imagen de': solo "
+                            "la descripción en sí."
+                        ),
+                    }
+                },
+                "required": ["descripcion"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_presentacion",
+            "description": (
+                "Úsala cuando el usuario pide explícitamente una "
+                "presentación, unas diapositivas, unos slides o un "
+                "PowerPoint sobre un tema."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tema": {
+                        "type": "string",
+                        "description": "El tema sobre el que debe tratar la presentación.",
+                    }
+                },
+                "required": ["tema"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "buscar_en_internet",
+            "description": (
+                "Úsala cuando la pregunta depende de información "
+                "actual, reciente o que cambia con el tiempo "
+                "(noticias, resultados deportivos, precios, el "
+                "tiempo, eventos de hoy, cotizaciones...) que no "
+                "puedes saber de memoria porque tu entrenamiento "
+                "tiene una fecha límite."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "consulta": {
+                        "type": "string",
+                        "description": "Qué hay que buscar en internet.",
+                    }
+                },
+                "required": ["consulta"],
+            },
+        },
+    },
+]
+
+
+def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO):
+    """Le pregunta a Groq (con function calling) qué acción encaja con
+    el mensaje del usuario -imagen, presentación o búsqueda web-, para
+    activarla automáticamente sin botones. Si algo falla o no aplica
+    ninguna, se trata como conversación normal (nunca bloquea el chat).
+    Devuelve {"accion": "imagen"|"presentacion"|"web"|"ninguna",
+    "parametro": "<texto limpio para esa acción>"}."""
+
+    sin_accion = {"accion": "ninguna", "parametro": texto}
+
+    api_key = obtener_api_key()
+    if not api_key or not api_key.startswith("gsk_"):
+        return sin_accion
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": MODELO_GROQ,
+            "stream": False,
+            "temperature": 0,
+            "max_completion_tokens": 300,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Decides qué acción necesita el mensaje del "
+                        "usuario, sin responderlo todavía. Si pide una "
+                        "imagen, llama a generar_imagen. Si pide una "
+                        "presentación o PowerPoint, llama a "
+                        "generar_presentacion. Si necesita datos "
+                        "actuales de internet, llama a "
+                        "buscar_en_internet. Si es una conversación "
+                        "normal (una pregunta general, pedir una "
+                        "explicación, un saludo, charlar...), NO "
+                        "llames a ninguna herramienta."
+                    ),
+                },
+                {"role": "user", "content": texto[:2000]},
+            ],
+            "tools": _HERRAMIENTAS_INTENCION,
+            "tool_choice": "auto",
+        }
+
+        respuesta = requests.post(
+            URL_GROQ, headers=headers, json=payload, timeout=10
+        )
+
+        if respuesta.status_code != 200:
+            return sin_accion
+
+        mensaje = respuesta.json().get("choices", [{}])[0].get("message", {})
+        llamadas = mensaje.get("tool_calls") or []
+
+        if not llamadas:
+            return sin_accion
+
+        llamada = llamadas[0].get("function", {})
+        nombre = llamada.get("name", "")
+
+        try:
+            argumentos = json.loads(llamada.get("arguments") or "{}")
+        except json.JSONDecodeError:
+            argumentos = {}
+
+        if nombre == "generar_imagen":
+            return {
+                "accion": "imagen",
+                "parametro": argumentos.get("descripcion") or texto,
+            }
+        if nombre == "generar_presentacion":
+            return {
+                "accion": "presentacion",
+                "parametro": argumentos.get("tema") or texto,
+            }
+        if nombre == "buscar_en_internet":
+            return {
+                "accion": "web",
+                "parametro": argumentos.get("consulta") or texto,
+            }
+
+        return sin_accion
+
+    except Exception:
+        return sin_accion
 
 
 # ============================================================
@@ -2681,28 +3531,9 @@ ha cambiado entre versiones de Streamlit, por eso cubrimos los dos). */
     margin-top: 18px;
 }
 
-/* Interruptores Imagen / Voz / Web: fijos justo encima del cuadro
-de texto, alineados a la izquierda */
-.st-key-barra_modos {
-    position: fixed;
-    bottom: 7.4rem;
-    z-index: 999;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center;
-    gap: 1.4rem !important;
-    width: auto !important;
-    background: transparent;
-}
-
-.st-key-barra_modos > div {
-    width: auto !important;
-    flex: 0 0 auto !important;
-}
-
-/* Deja hueco abajo para que la barra fija no tape los mensajes */
+/* Deja hueco abajo para que el cuadro de texto no tape los mensajes */
 [data-testid="stMainBlockContainer"] {
-    padding-bottom: 10rem !important;
+    padding-bottom: 6rem !important;
 }
 
 /* ------------------------------------------------------------
@@ -2888,15 +3719,8 @@ esto: la barra lateral ya sale abierta sola. */
         font-size: 1.1rem;
     }
 
-    .st-key-barra_modos {
-        bottom: 6.4rem;
-        gap: 0.6rem 1rem !important;
-        flex-wrap: wrap !important;
-        max-width: calc(100vw - 1.4rem);
-    }
-
-    /* Los interruptores en columna en vez de apretujados uno
-    junto al otro en pantallas estrechas. */
+    /* Los botones en columna en vez de apretujados uno junto al
+    otro en pantallas estrechas. */
     div[data-testid="stHorizontalBlock"] {
         flex-wrap: wrap;
     }
@@ -3809,6 +4633,8 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
                     "titulo", t("presentacion_sin_titulo")
                 )
                 n_diapositivas = message.get("n_diapositivas", 0)
+                ruta_pdf = message.get("ruta_pdf")
+                ruta_html = message.get("ruta_html")
 
                 st.markdown(
                     t(
@@ -3818,18 +4644,43 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
                     )
                 )
 
-                with open(content, "rb") as f:
-                    st.download_button(
-                        t("descargar_presentacion"),
-                        data=f.read(),
-                        file_name=f"{_nombre_archivo_seguro(titulo_pptx)}.pptx",
-                        mime=(
-                            "application/vnd.openxmlformats-officedocument"
-                            ".presentationml.presentation"
-                        ),
-                        use_container_width=True,
-                        key=f"descargar_pptx_{indice_mensaje}",
-                    )
+                if ruta_html and os.path.exists(ruta_html):
+                    with open(ruta_html, "r", encoding="utf-8") as f:
+                        components.html(f.read(), height=600, scrolling=False)
+
+                hay_pdf = bool(ruta_pdf) and os.path.exists(ruta_pdf)
+
+                def _boton_pptx():
+                    with open(content, "rb") as f:
+                        st.download_button(
+                            t("descargar_presentacion"),
+                            data=f.read(),
+                            file_name=f"{_nombre_archivo_seguro(titulo_pptx)}.pptx",
+                            mime=(
+                                "application/vnd.openxmlformats-officedocument"
+                                ".presentationml.presentation"
+                            ),
+                            use_container_width=True,
+                            key=f"descargar_pptx_{indice_mensaje}",
+                        )
+
+                if hay_pdf:
+                    st.caption(t("exportar_como"))
+                    col_pptx, col_pdf = st.columns(2)
+                    with col_pptx:
+                        _boton_pptx()
+                    with col_pdf:
+                        with open(ruta_pdf, "rb") as f:
+                            st.download_button(
+                                t("descargar_pdf"),
+                                data=f.read(),
+                                file_name=f"{_nombre_archivo_seguro(titulo_pptx)}.pdf",
+                                mime="application/pdf",
+                                use_container_width=True,
+                                key=f"descargar_pdf_{indice_mensaje}",
+                            )
+                else:
+                    _boton_pptx()
             else:
                 st.markdown(t("pptx_no_disponible"))
 
@@ -3838,39 +4689,11 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
 # 13. INPUT DEL CHAT
 # ============================================================
 
-with st.container(key="barra_modos"):
-    modo_imagen = st.toggle(t("toggle_imagen"), key="modo_imagen")
-    modo_voz = st.toggle(t("toggle_voz"), key="modo_voz")
-    modo_web = st.toggle(t("toggle_web"), key="modo_web")
-    modo_presentacion = st.toggle(
-        t("toggle_presentacion"), key="modo_presentacion"
-    )
-
-# --------------------------------------------------------------
-# MODO VOZ: grabar y transcribir automáticamente
-# --------------------------------------------------------------
-
-texto_por_voz = None
-
-if modo_voz:
-
-    audio_grabado = st.audio_input(t("grabar_pregunta"))
-
-    if audio_grabado is not None:
-
-        audio_bytes = audio_grabado.getvalue()
-        audio_hash = hash(audio_bytes)
-
-        if st.session_state.get("ultimo_audio_procesado") != audio_hash:
-
-            with st.spinner(t("transcribiendo_voz")):
-                texto_transcrito, error_audio = transcribir_audio(audio_bytes)
-
-            if error_audio:
-                st.error(t("error_transcribir_audio", error=error_audio))
-            elif texto_transcrito:
-                st.session_state.ultimo_audio_procesado = audio_hash
-                texto_por_voz = texto_transcrito
+# Imagen, búsqueda web y presentación ya no son interruptores: ORIA
+# decide sola si hacen falta según lo que se escriba (ver
+# "detectar_intencion" y su uso más abajo). La voz está desactivada
+# de momento (transcribir_audio() se queda sin usar, por si se
+# retoma más adelante).
 
 entrada = st.chat_input(
     t("chat_placeholder"),
@@ -3879,17 +4702,29 @@ entrada = st.chat_input(
 )
 
 
-if entrada or texto_por_voz:
+if entrada:
 
-    if entrada:
-        user_text = (entrada.text or "").strip()
-        archivo_adjunto = entrada.files[0] if entrada.files else None
-    else:
-        user_text = texto_por_voz.strip()
-        archivo_adjunto = None
+    user_text = (entrada.text or "").strip()
+    archivo_adjunto = entrada.files[0] if entrada.files else None
 
     if not user_text and not archivo_adjunto:
         st.stop()
+
+    # ========================================================
+    # DETECTAR AUTOMÁTICAMENTE SI HACE FALTA IMAGEN, PRESENTACIÓN
+    # O BÚSQUEDA WEB (sin que el usuario tenga que pulsar nada)
+    # ========================================================
+
+    intencion = {"accion": "ninguna", "parametro": user_text}
+
+    # Si ya hay un archivo adjunto (PDF o imagen para analizar), ese
+    # siempre manda: no tiene sentido "adivinar" otra acción distinta.
+    if user_text and not archivo_adjunto:
+        intencion = detectar_intencion(user_text, idioma=st.session_state.idioma)
+
+    modo_imagen_auto = intencion["accion"] == "imagen"
+    modo_presentacion_auto = intencion["accion"] == "presentacion"
+    modo_web_auto = intencion["accion"] == "web"
 
     # ========================================================
     # CREAR NUEVA CONVERSACIÓN SI NO EXISTE
@@ -3992,10 +4827,10 @@ if entrada or texto_por_voz:
         # MODO: GENERAR IMAGEN
         # ----------------------------------------------------
 
-        if modo_imagen and user_text:
+        if modo_imagen_auto:
 
             with st.spinner(t("puliendo_descripcion")):
-                prompt_mejorado = mejorar_prompt_imagen(user_text)
+                prompt_mejorado = mejorar_prompt_imagen(intencion["parametro"])
 
             with st.spinner(t("generando_imagen")):
                 imagen_bytes, error = generar_imagen_ia(prompt_mejorado)
@@ -4029,11 +4864,11 @@ if entrada or texto_por_voz:
         # MODO: GENERAR PRESENTACIÓN (.pptx)
         # ----------------------------------------------------
 
-        elif modo_presentacion and user_text:
+        elif modo_presentacion_auto:
 
             with st.spinner(t("generando_contenido_presentacion")):
                 contenido_pptx, error = generar_contenido_presentacion(
-                    user_text, idioma=st.session_state.idioma
+                    intencion["parametro"], idioma=st.session_state.idioma
                 )
 
             if error or not contenido_pptx:
@@ -4048,11 +4883,23 @@ if entrada or texto_por_voz:
             else:
                 with st.spinner(t("creando_pptx")):
                     os.makedirs(CARPETA_PRESENTACIONES, exist_ok=True)
+                    identificador = uuid.uuid4()
                     nombre_archivo = os.path.join(
-                        CARPETA_PRESENTACIONES, f"{uuid.uuid4()}.pptx"
+                        CARPETA_PRESENTACIONES, f"{identificador}.pptx"
+                    )
+                    ruta_pdf = os.path.join(
+                        CARPETA_PRESENTACIONES, f"{identificador}.pdf"
+                    )
+                    ruta_html = os.path.join(
+                        CARPETA_PRESENTACIONES, f"{identificador}.html"
                     )
                     try:
-                        crear_pptx(contenido_pptx, nombre_archivo)
+                        # Se descargan las imágenes una sola vez y se
+                        # reutilizan en los tres formatos (pptx, pdf y
+                        # vista previa) para no llamar dos veces a
+                        # Pexels/Wikimedia por la misma diapositiva.
+                        cache_imagenes = obtener_imagenes_presentacion(contenido_pptx)
+                        crear_pptx(contenido_pptx, nombre_archivo, cache_imagenes=cache_imagenes)
                         error_pptx = None
                     except Exception as e:
                         error_pptx = str(e)
@@ -4067,6 +4914,20 @@ if entrada or texto_por_voz:
                         ),
                     }
                 else:
+                    with st.spinner(t("creando_exportables")):
+                        try:
+                            crear_pdf(contenido_pptx, ruta_pdf, cache_imagenes=cache_imagenes)
+                        except Exception:
+                            ruta_pdf = None
+                        try:
+                            html_preview = generar_html_presentacion(
+                                contenido_pptx, cache_imagenes
+                            )
+                            with open(ruta_html, "w", encoding="utf-8") as f:
+                                f.write(html_preview)
+                        except Exception:
+                            ruta_html = None
+
                     titulo_pptx = contenido_pptx.get(
                         "titulo", t("presentacion_sin_titulo")
                     )
@@ -4082,22 +4943,41 @@ if entrada or texto_por_voz:
                         )
                     )
 
-                    with open(nombre_archivo, "rb") as f:
-                        st.download_button(
-                            t("descargar_presentacion"),
-                            data=f.read(),
-                            file_name=f"{_nombre_archivo_seguro(titulo_pptx)}.pptx",
-                            mime=(
-                                "application/vnd.openxmlformats-officedocument"
-                                ".presentationml.presentation"
-                            ),
-                            use_container_width=True,
-                        )
+                    if ruta_html and os.path.exists(ruta_html):
+                        with open(ruta_html, "r", encoding="utf-8") as f:
+                            components.html(f.read(), height=600, scrolling=False)
+
+                    st.caption(t("exportar_como"))
+                    col_pptx, col_pdf = st.columns(2)
+                    with col_pptx:
+                        with open(nombre_archivo, "rb") as f:
+                            st.download_button(
+                                t("descargar_presentacion"),
+                                data=f.read(),
+                                file_name=f"{_nombre_archivo_seguro(titulo_pptx)}.pptx",
+                                mime=(
+                                    "application/vnd.openxmlformats-officedocument"
+                                    ".presentationml.presentation"
+                                ),
+                                use_container_width=True,
+                            )
+                    if ruta_pdf and os.path.exists(ruta_pdf):
+                        with col_pdf:
+                            with open(ruta_pdf, "rb") as f:
+                                st.download_button(
+                                    t("descargar_pdf"),
+                                    data=f.read(),
+                                    file_name=f"{_nombre_archivo_seguro(titulo_pptx)}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True,
+                                )
 
                     respuesta_final = {
                         "role": "assistant",
                         "type": "pptx",
                         "content": nombre_archivo,
+                        "ruta_pdf": ruta_pdf,
+                        "ruta_html": ruta_html,
                         "prompt": user_text,
                         "titulo": titulo_pptx,
                         "n_diapositivas": n_diapositivas,
@@ -4181,11 +5061,11 @@ if entrada or texto_por_voz:
             resultados_web = []
             web_fallida = False
 
-            if modo_web or necesita_busqueda(user_text):
+            if modo_web_auto or necesita_busqueda(user_text):
 
                 # Si el mensaje es muy corto ("¿y mañana?"), le
                 # sumamos la pregunta anterior para dar contexto.
-                consulta = user_text
+                consulta = intencion["parametro"] if modo_web_auto else user_text
 
                 if len(user_text) < 25:
                     previos = [
