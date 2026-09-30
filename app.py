@@ -522,10 +522,7 @@ TEXTOS = {
             "a veces algún error puntual bajo mucha demanda — es el "
             "límite normal de una herramienta 100% gratuita."
         ),
-        "toggle_imagen": "Imagen",
         "toggle_voz": "Voz",
-        "toggle_web": "Web",
-        "toggle_presentacion": "Presentación",
         "grabar_pregunta": "Pulsa para grabar tu pregunta",
         "transcribiendo_voz": "Transcribiendo tu voz...",
         "chat_placeholder": "Pregunta a ORIA, o adjunta una imagen/PDF...",
@@ -623,10 +620,7 @@ TEXTOS = {
             "occasionally an error under heavy demand — the normal "
             "limit of a 100% free tool."
         ),
-        "toggle_imagen": "Image",
         "toggle_voz": "Voice",
-        "toggle_web": "Web",
-        "toggle_presentacion": "Slides",
         "grabar_pregunta": "Tap to record your question",
         "transcribiendo_voz": "Transcribing your voice...",
         "chat_placeholder": "Ask ORIA, or attach an image/PDF...",
@@ -725,10 +719,7 @@ TEXTOS = {
             "i de vegades algun error puntual sota molta demanda — "
             "és el límit normal d'una eina 100% gratuïta."
         ),
-        "toggle_imagen": "Imatge",
         "toggle_voz": "Veu",
-        "toggle_web": "Web",
-        "toggle_presentacion": "Presentació",
         "grabar_pregunta": "Prem per gravar la teva pregunta",
         "transcribiendo_voz": "Transcrivint la teva veu...",
         "chat_placeholder": "Pregunta a l'ORIA, o adjunta una imatge/PDF...",
@@ -829,10 +820,7 @@ TEXTOS = {
             "et parfois une erreur ponctuelle en cas de forte "
             "demande — la limite normale d'un outil 100% gratuit."
         ),
-        "toggle_imagen": "Image",
         "toggle_voz": "Voix",
-        "toggle_web": "Web",
-        "toggle_presentacion": "Présentation",
         "grabar_pregunta": "Appuie pour enregistrer ta question",
         "transcribiendo_voz": "Transcription de ta voix...",
         "chat_placeholder": "Demande à ORIA, ou joins une image/PDF...",
@@ -2115,6 +2103,181 @@ def formatear_contexto_web(resultados):
 
 
 # ============================================================
+# 5C. DETECCIÓN AUTOMÁTICA DE INTENCIÓN (sin botones)
+# ============================================================
+
+# Herramientas que la IA puede "llamar" ella sola, según lo que haya
+# escrito el usuario, en vez de que el usuario tenga que activar un
+# interruptor a mano. Esto es lo que se llama "tool calling"/"function
+# calling": le describimos a la IA qué acciones existen, y ella decide
+# cuál (si alguna) encaja con el mensaje.
+_HERRAMIENTAS_INTENCION = [
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_imagen",
+            "description": (
+                "Úsala cuando el usuario pide explícitamente que se "
+                "dibuje, genere, cree o haga una imagen, foto, dibujo "
+                "o ilustración de algo. No la uses si solo está "
+                "hablando de imágenes en general, o si ha adjuntado "
+                "él mismo una imagen o un PDF."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "descripcion": {
+                        "type": "string",
+                        "description": (
+                            "Qué imagen hay que generar, limpia de "
+                            "frases como 'hazme una imagen de': solo "
+                            "la descripción en sí."
+                        ),
+                    }
+                },
+                "required": ["descripcion"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_presentacion",
+            "description": (
+                "Úsala cuando el usuario pide explícitamente una "
+                "presentación, unas diapositivas, unos slides o un "
+                "PowerPoint sobre un tema."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tema": {
+                        "type": "string",
+                        "description": "El tema sobre el que debe tratar la presentación.",
+                    }
+                },
+                "required": ["tema"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "buscar_en_internet",
+            "description": (
+                "Úsala cuando la pregunta depende de información "
+                "actual, reciente o que cambia con el tiempo "
+                "(noticias, resultados deportivos, precios, el "
+                "tiempo, eventos de hoy, cotizaciones...) que no "
+                "puedes saber de memoria porque tu entrenamiento "
+                "tiene una fecha límite."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "consulta": {
+                        "type": "string",
+                        "description": "Qué hay que buscar en internet.",
+                    }
+                },
+                "required": ["consulta"],
+            },
+        },
+    },
+]
+
+
+def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO):
+    """Le pregunta a Groq (con function calling) qué acción encaja con
+    el mensaje del usuario -imagen, presentación o búsqueda web-, para
+    activarla automáticamente sin botones. Si algo falla o no aplica
+    ninguna, se trata como conversación normal (nunca bloquea el chat).
+    Devuelve {"accion": "imagen"|"presentacion"|"web"|"ninguna",
+    "parametro": "<texto limpio para esa acción>"}."""
+
+    sin_accion = {"accion": "ninguna", "parametro": texto}
+
+    api_key = obtener_api_key()
+    if not api_key or not api_key.startswith("gsk_"):
+        return sin_accion
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": MODELO_GROQ,
+            "stream": False,
+            "temperature": 0,
+            "max_completion_tokens": 300,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Decides qué acción necesita el mensaje del "
+                        "usuario, sin responderlo todavía. Si pide una "
+                        "imagen, llama a generar_imagen. Si pide una "
+                        "presentación o PowerPoint, llama a "
+                        "generar_presentacion. Si necesita datos "
+                        "actuales de internet, llama a "
+                        "buscar_en_internet. Si es una conversación "
+                        "normal (una pregunta general, pedir una "
+                        "explicación, un saludo, charlar...), NO "
+                        "llames a ninguna herramienta."
+                    ),
+                },
+                {"role": "user", "content": texto[:2000]},
+            ],
+            "tools": _HERRAMIENTAS_INTENCION,
+            "tool_choice": "auto",
+        }
+
+        respuesta = requests.post(
+            URL_GROQ, headers=headers, json=payload, timeout=10
+        )
+
+        if respuesta.status_code != 200:
+            return sin_accion
+
+        mensaje = respuesta.json().get("choices", [{}])[0].get("message", {})
+        llamadas = mensaje.get("tool_calls") or []
+
+        if not llamadas:
+            return sin_accion
+
+        llamada = llamadas[0].get("function", {})
+        nombre = llamada.get("name", "")
+
+        try:
+            argumentos = json.loads(llamada.get("arguments") or "{}")
+        except json.JSONDecodeError:
+            argumentos = {}
+
+        if nombre == "generar_imagen":
+            return {
+                "accion": "imagen",
+                "parametro": argumentos.get("descripcion") or texto,
+            }
+        if nombre == "generar_presentacion":
+            return {
+                "accion": "presentacion",
+                "parametro": argumentos.get("tema") or texto,
+            }
+        if nombre == "buscar_en_internet":
+            return {
+                "accion": "web",
+                "parametro": argumentos.get("consulta") or texto,
+            }
+
+        return sin_accion
+
+    except Exception:
+        return sin_accion
+
+
+# ============================================================
 # 6. FUNCIÓN PRINCIPAL DE LA IA
 # ============================================================
 
@@ -2681,8 +2844,8 @@ ha cambiado entre versiones de Streamlit, por eso cubrimos los dos). */
     margin-top: 18px;
 }
 
-/* Interruptores Imagen / Voz / Web: fijos justo encima del cuadro
-de texto, alineados a la izquierda */
+/* Interruptor de Voz: fijo justo encima del cuadro de texto,
+alineado a la izquierda */
 .st-key-barra_modos {
     position: fixed;
     bottom: 7.4rem;
@@ -3838,13 +4001,13 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
 # 13. INPUT DEL CHAT
 # ============================================================
 
+# Imagen, búsqueda web y presentación ya no son interruptores: ORIA
+# decide sola si hacen falta según lo que se escriba (ver
+# "detectar_intencion" y su uso más abajo). Voz sigue siendo un
+# interruptor porque grabar audio necesita una acción manual: no hay
+# texto todavía del que la IA pueda deducir que se quiere hablar.
 with st.container(key="barra_modos"):
-    modo_imagen = st.toggle(t("toggle_imagen"), key="modo_imagen")
     modo_voz = st.toggle(t("toggle_voz"), key="modo_voz")
-    modo_web = st.toggle(t("toggle_web"), key="modo_web")
-    modo_presentacion = st.toggle(
-        t("toggle_presentacion"), key="modo_presentacion"
-    )
 
 # --------------------------------------------------------------
 # MODO VOZ: grabar y transcribir automáticamente
@@ -3890,6 +4053,22 @@ if entrada or texto_por_voz:
 
     if not user_text and not archivo_adjunto:
         st.stop()
+
+    # ========================================================
+    # DETECTAR AUTOMÁTICAMENTE SI HACE FALTA IMAGEN, PRESENTACIÓN
+    # O BÚSQUEDA WEB (sin que el usuario tenga que pulsar nada)
+    # ========================================================
+
+    intencion = {"accion": "ninguna", "parametro": user_text}
+
+    # Si ya hay un archivo adjunto (PDF o imagen para analizar), ese
+    # siempre manda: no tiene sentido "adivinar" otra acción distinta.
+    if user_text and not archivo_adjunto:
+        intencion = detectar_intencion(user_text, idioma=st.session_state.idioma)
+
+    modo_imagen_auto = intencion["accion"] == "imagen"
+    modo_presentacion_auto = intencion["accion"] == "presentacion"
+    modo_web_auto = intencion["accion"] == "web"
 
     # ========================================================
     # CREAR NUEVA CONVERSACIÓN SI NO EXISTE
@@ -3992,10 +4171,10 @@ if entrada or texto_por_voz:
         # MODO: GENERAR IMAGEN
         # ----------------------------------------------------
 
-        if modo_imagen and user_text:
+        if modo_imagen_auto:
 
             with st.spinner(t("puliendo_descripcion")):
-                prompt_mejorado = mejorar_prompt_imagen(user_text)
+                prompt_mejorado = mejorar_prompt_imagen(intencion["parametro"])
 
             with st.spinner(t("generando_imagen")):
                 imagen_bytes, error = generar_imagen_ia(prompt_mejorado)
@@ -4029,11 +4208,11 @@ if entrada or texto_por_voz:
         # MODO: GENERAR PRESENTACIÓN (.pptx)
         # ----------------------------------------------------
 
-        elif modo_presentacion and user_text:
+        elif modo_presentacion_auto:
 
             with st.spinner(t("generando_contenido_presentacion")):
                 contenido_pptx, error = generar_contenido_presentacion(
-                    user_text, idioma=st.session_state.idioma
+                    intencion["parametro"], idioma=st.session_state.idioma
                 )
 
             if error or not contenido_pptx:
@@ -4181,11 +4360,11 @@ if entrada or texto_por_voz:
             resultados_web = []
             web_fallida = False
 
-            if modo_web or necesita_busqueda(user_text):
+            if modo_web_auto or necesita_busqueda(user_text):
 
                 # Si el mensaje es muy corto ("¿y mañana?"), le
                 # sumamos la pregunta anterior para dar contexto.
-                consulta = user_text
+                consulta = intencion["parametro"] if modo_web_auto else user_text
 
                 if len(user_text) < 25:
                     previos = [
