@@ -1,5 +1,6 @@
 import json
 import os
+import io
 import uuid
 import html
 import base64
@@ -18,6 +19,7 @@ from pptx.dml.color import RGBColor
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
+from PIL import Image
 
 
 # ============================================================
@@ -466,10 +468,10 @@ TEXTOS = {
         "conversacion_sin_titulo": "Nueva conversación",
         "archivo_titulo": "Archivo: {nombre}",
         "ajustes_titulo": "Ajustes",
-        "tab_idioma": "🌐 Idioma",
-        "tab_memoria": "🧠 Memoria",
-        "tab_cuenta": "👤 Cuenta",
-        "tab_estado": "ℹ️ Estado",
+        "tab_idioma": "Idioma",
+        "tab_memoria": "Memoria",
+        "tab_cuenta": "Cuenta",
+        "tab_estado": "Estado",
         "idioma_caption": (
             "Elige en qué idioma quieres que te responda ORIA. Puedes "
             "escribirle en cualquier idioma: ella siempre te "
@@ -484,12 +486,12 @@ TEXTOS = {
         "guardar_memoria": "Guardar memoria",
         "memoria_guardada": "Memoria guardada.",
         "cuenta_invitado": (
-            "👤 Modo invitado: el inicio de sesión aún no está "
+            "Modo invitado: el inicio de sesión aún no está "
             "configurado."
         ),
         "cuenta_sesion_como": "Sesión iniciada como **{nombre}**.",
         "cerrar_sesion": "Cerrar sesión",
-        "eliminar_cuenta_titulo": "⚠️ Eliminar mi cuenta y mis datos",
+        "eliminar_cuenta_titulo": "Eliminar mi cuenta y mis datos",
         "eliminar_cuenta_caption": (
             "Borra todas tus conversaciones y tu memoria de forma "
             "permanente. No se puede deshacer."
@@ -504,11 +506,11 @@ TEXTOS = {
             "pueden usar 'Añadir a pantalla de inicio' para que "
             "funcione como una app."
         ),
-        "estado_web_activa": "🌐 Búsqueda web activa",
-        "estado_web_inactiva": "🌐 Búsqueda web sin configurar",
-        "estado_nube": "☁️ Datos guardados en la nube",
+        "estado_web_activa": "Búsqueda web activa",
+        "estado_web_inactiva": "Búsqueda web sin configurar",
+        "estado_nube": "Datos guardados en la nube",
         "estado_servidor": (
-            "⚠️ Datos guardados solo en el servidor (pueden perderse "
+            "Datos guardados solo en el servidor (pueden perderse "
             "al reiniciar). Configura Supabase para guardarlos en la "
             "nube."
         ),
@@ -520,18 +522,18 @@ TEXTOS = {
             "a veces algún error puntual bajo mucha demanda — es el "
             "límite normal de una herramienta 100% gratuita."
         ),
-        "toggle_imagen": "🎨 Imagen",
-        "toggle_voz": "🎤 Voz",
-        "toggle_web": "🌐 Web",
-        "toggle_presentacion": "📊 Presentación",
+        "toggle_imagen": "Imagen",
+        "toggle_voz": "Voz",
+        "toggle_web": "Web",
+        "toggle_presentacion": "Presentación",
         "grabar_pregunta": "Pulsa para grabar tu pregunta",
         "transcribiendo_voz": "Transcribiendo tu voz...",
         "chat_placeholder": "Pregunta a ORIA, o adjunta una imagen/PDF...",
-        "boton_escuchar": "🔊 Escuchar",
-        "boton_copiar": "📋 Copiar",
-        "boton_copiado": "✅ Copiado",
-        "fuentes": "🔎 Fuentes ({n})",
-        "imagen_no_disponible": "⚠️ *(La imagen generada ya no está disponible)*",
+        "boton_escuchar": "Escuchar",
+        "boton_copiar": "Copiar",
+        "boton_copiado": "Copiado",
+        "fuentes": "Fuentes ({n})",
+        "imagen_no_disponible": "*(La imagen generada ya no está disponible)*",
         "resumen_pdf_defecto": "Resume este documento y destaca los puntos clave.",
         "describe_imagen_defecto": "Describe esta imagen y explica qué ves con detalle.",
         "error_transcribir_audio": "No se pudo transcribir el audio: {error}",
@@ -539,27 +541,27 @@ TEXTOS = {
         "buscando_web": "Buscando en la web...",
         "puliendo_descripcion": "Puliendo la descripción...",
         "generando_imagen": "Generando imagen...",
-        "no_pude_generar_imagen": "⚠️ No he podido generar la imagen: {error}",
+        "no_pude_generar_imagen": "No he podido generar la imagen: {error}",
         "leyendo_pdf": "Leyendo el PDF...",
-        "no_pude_leer_pdf": "⚠️ No he podido leer el PDF: {error}",
+        "no_pude_leer_pdf": "No he podido leer el PDF: {error}",
         "generando_contenido_presentacion": "Redactando el contenido de la presentación...",
-        "creando_pptx": "Montando la presentación...",
+        "creando_pptx": "Montando la presentación y buscando imágenes...",
         "error_generar_presentacion": "No se pudo generar la presentación: {error}",
-        "no_pude_generar_presentacion": "⚠️ No he podido generar la presentación: {error}",
-        "presentacion_generada": "📊 He creado tu presentación: **{titulo}** ({n} diapositivas).",
-        "descargar_presentacion": "⬇️ Descargar presentación (.pptx)",
-        "pptx_no_disponible": "⚠️ *(Esta presentación ya no está disponible)*",
+        "no_pude_generar_presentacion": "No he podido generar la presentación: {error}",
+        "presentacion_generada": "He creado tu presentación: **{titulo}** ({n} diapositivas).",
+        "descargar_presentacion": "Descargar presentación (.pptx)",
+        "pptx_no_disponible": "*(Esta presentación ya no está disponible)*",
         "presentacion_sin_titulo": "Presentación",
         "web_no_configurada": (
-            "🌐 La búsqueda web no está configurada todavía, así que "
+            "La búsqueda web no está configurada todavía, así que "
             "no puedo confirmar datos de última hora."
         ),
-        "web_no_disponible": "🌐 No he podido consultar la web ahora mismo.",
+        "web_no_disponible": "No he podido consultar la web ahora mismo.",
         "error_413": (
-            "⚠️ **La conversación se ha quedado demasiado larga para "
+            "**La conversación se ha quedado demasiado larga para "
             "el plan gratuito de Groq en este momento (demasiados "
             "tokens por minuto).**\n\n"
-            "Prueba a pulsar '➕ Nueva conversación' para empezar de "
+            "Prueba a pulsar 'Nueva conversación' para empezar de "
             "cero, o espera un minuto y vuelve a intentarlo."
         ),
         "invitado": "Invitado",
@@ -570,10 +572,10 @@ TEXTOS = {
         "conversacion_sin_titulo": "New chat",
         "archivo_titulo": "File: {nombre}",
         "ajustes_titulo": "Settings",
-        "tab_idioma": "🌐 Language",
-        "tab_memoria": "🧠 Memory",
-        "tab_cuenta": "👤 Account",
-        "tab_estado": "ℹ️ Status",
+        "tab_idioma": "Language",
+        "tab_memoria": "Memory",
+        "tab_cuenta": "Account",
+        "tab_estado": "Status",
         "idioma_caption": (
             "Choose the language you want ORIA to reply in. You can "
             "write to it in any language: it will always answer in "
@@ -588,11 +590,11 @@ TEXTOS = {
         "guardar_memoria": "Save memory",
         "memoria_guardada": "Memory saved.",
         "cuenta_invitado": (
-            "👤 Guest mode: sign-in isn't configured yet."
+            "Guest mode: sign-in isn't configured yet."
         ),
         "cuenta_sesion_como": "Signed in as **{nombre}**.",
         "cerrar_sesion": "Sign out",
-        "eliminar_cuenta_titulo": "⚠️ Delete my account and data",
+        "eliminar_cuenta_titulo": "Delete my account and data",
         "eliminar_cuenta_caption": (
             "Permanently deletes all your conversations and your "
             "memory. This can't be undone."
@@ -606,11 +608,11 @@ TEXTOS = {
             "memory kept separate from yours. On mobile they can use "
             "'Add to home screen' so it works like an app."
         ),
-        "estado_web_activa": "🌐 Web search active",
-        "estado_web_inactiva": "🌐 Web search not configured",
-        "estado_nube": "☁️ Data saved in the cloud",
+        "estado_web_activa": "Web search active",
+        "estado_web_inactiva": "Web search not configured",
+        "estado_nube": "Data saved in the cloud",
         "estado_servidor": (
-            "⚠️ Data saved only on the server (may be lost on "
+            "Data saved only on the server (may be lost on "
             "restart). Configure Supabase to save it to the cloud."
         ),
         "estado_calidad_imagen": (
@@ -621,18 +623,18 @@ TEXTOS = {
             "occasionally an error under heavy demand — the normal "
             "limit of a 100% free tool."
         ),
-        "toggle_imagen": "🎨 Image",
-        "toggle_voz": "🎤 Voice",
-        "toggle_web": "🌐 Web",
-        "toggle_presentacion": "📊 Slides",
+        "toggle_imagen": "Image",
+        "toggle_voz": "Voice",
+        "toggle_web": "Web",
+        "toggle_presentacion": "Slides",
         "grabar_pregunta": "Tap to record your question",
         "transcribiendo_voz": "Transcribing your voice...",
         "chat_placeholder": "Ask ORIA, or attach an image/PDF...",
-        "boton_escuchar": "🔊 Listen",
-        "boton_copiar": "📋 Copy",
-        "boton_copiado": "✅ Copied",
-        "fuentes": "🔎 Sources ({n})",
-        "imagen_no_disponible": "⚠️ *(This generated image is no longer available)*",
+        "boton_escuchar": "Listen",
+        "boton_copiar": "Copy",
+        "boton_copiado": "Copied",
+        "fuentes": "Sources ({n})",
+        "imagen_no_disponible": "*(This generated image is no longer available)*",
         "resumen_pdf_defecto": "Summarize this document and highlight the key points.",
         "describe_imagen_defecto": "Describe this image and explain what you see in detail.",
         "error_transcribir_audio": "Couldn't transcribe the audio: {error}",
@@ -640,26 +642,26 @@ TEXTOS = {
         "buscando_web": "Searching the web...",
         "puliendo_descripcion": "Polishing the description...",
         "generando_imagen": "Generating image...",
-        "no_pude_generar_imagen": "⚠️ I couldn't generate the image: {error}",
+        "no_pude_generar_imagen": "I couldn't generate the image: {error}",
         "leyendo_pdf": "Reading the PDF...",
-        "no_pude_leer_pdf": "⚠️ I couldn't read the PDF: {error}",
+        "no_pude_leer_pdf": "I couldn't read the PDF: {error}",
         "generando_contenido_presentacion": "Writing the presentation content...",
-        "creando_pptx": "Putting the slides together...",
+        "creando_pptx": "Putting the slides together and finding images...",
         "error_generar_presentacion": "Couldn't generate the presentation: {error}",
-        "no_pude_generar_presentacion": "⚠️ I couldn't generate the presentation: {error}",
-        "presentacion_generada": "📊 I've created your presentation: **{titulo}** ({n} slides).",
-        "descargar_presentacion": "⬇️ Download presentation (.pptx)",
-        "pptx_no_disponible": "⚠️ *(This presentation is no longer available)*",
+        "no_pude_generar_presentacion": "I couldn't generate the presentation: {error}",
+        "presentacion_generada": "I've created your presentation: **{titulo}** ({n} slides).",
+        "descargar_presentacion": "Download presentation (.pptx)",
+        "pptx_no_disponible": "*(This presentation is no longer available)*",
         "presentacion_sin_titulo": "Presentation",
         "web_no_configurada": (
-            "🌐 Web search isn't configured yet, so I can't confirm "
+            "Web search isn't configured yet, so I can't confirm "
             "up-to-the-minute data."
         ),
-        "web_no_disponible": "🌐 I couldn't check the web right now.",
+        "web_no_disponible": "I couldn't check the web right now.",
         "error_413": (
-            "⚠️ **This conversation has gotten too long for Groq's "
+            "**This conversation has gotten too long for Groq's "
             "free plan right now (too many tokens per minute).**\n\n"
-            "Try tapping '➕ New chat' to start fresh, or wait a "
+            "Try tapping 'New chat' to start fresh, or wait a "
             "minute and try again."
         ),
         "invitado": "Guest",
@@ -670,10 +672,10 @@ TEXTOS = {
         "conversacion_sin_titulo": "Nova conversa",
         "archivo_titulo": "Fitxer: {nombre}",
         "ajustes_titulo": "Ajustos",
-        "tab_idioma": "🌐 Idioma",
-        "tab_memoria": "🧠 Memòria",
-        "tab_cuenta": "👤 Compte",
-        "tab_estado": "ℹ️ Estat",
+        "tab_idioma": "Idioma",
+        "tab_memoria": "Memòria",
+        "tab_cuenta": "Compte",
+        "tab_estado": "Estat",
         "idioma_caption": (
             "Tria en quin idioma vols que et respongui ORIA. Li pots "
             "escriure en qualsevol idioma: sempre et contestarà en "
@@ -688,12 +690,12 @@ TEXTOS = {
         "guardar_memoria": "Desar memòria",
         "memoria_guardada": "Memòria desada.",
         "cuenta_invitado": (
-            "👤 Mode convidat: l'inici de sessió encara no està "
+            "Mode convidat: l'inici de sessió encara no està "
             "configurat."
         ),
         "cuenta_sesion_como": "Sessió iniciada com a **{nombre}**.",
         "cerrar_sesion": "Tancar sessió",
-        "eliminar_cuenta_titulo": "⚠️ Eliminar el meu compte i les meves dades",
+        "eliminar_cuenta_titulo": "Eliminar el meu compte i les meves dades",
         "eliminar_cuenta_caption": (
             "Esborra totes les teves converses i la teva memòria de "
             "forma permanent. No es pot desfer."
@@ -708,11 +710,11 @@ TEXTOS = {
             "usar 'Afegeix a la pantalla d'inici' perquè funcioni "
             "com una app."
         ),
-        "estado_web_activa": "🌐 Cerca web activa",
-        "estado_web_inactiva": "🌐 Cerca web sense configurar",
-        "estado_nube": "☁️ Dades desades al núvol",
+        "estado_web_activa": "Cerca web activa",
+        "estado_web_inactiva": "Cerca web sense configurar",
+        "estado_nube": "Dades desades al núvol",
         "estado_servidor": (
-            "⚠️ Dades desades només al servidor (es poden perdre en "
+            "Dades desades només al servidor (es poden perdre en "
             "reiniciar). Configura Supabase per desar-les al núvol."
         ),
         "estado_calidad_imagen": (
@@ -723,18 +725,18 @@ TEXTOS = {
             "i de vegades algun error puntual sota molta demanda — "
             "és el límit normal d'una eina 100% gratuïta."
         ),
-        "toggle_imagen": "🎨 Imatge",
-        "toggle_voz": "🎤 Veu",
-        "toggle_web": "🌐 Web",
-        "toggle_presentacion": "📊 Presentació",
+        "toggle_imagen": "Imatge",
+        "toggle_voz": "Veu",
+        "toggle_web": "Web",
+        "toggle_presentacion": "Presentació",
         "grabar_pregunta": "Prem per gravar la teva pregunta",
         "transcribiendo_voz": "Transcrivint la teva veu...",
         "chat_placeholder": "Pregunta a l'ORIA, o adjunta una imatge/PDF...",
-        "boton_escuchar": "🔊 Escoltar",
-        "boton_copiar": "📋 Copiar",
-        "boton_copiado": "✅ Copiat",
-        "fuentes": "🔎 Fonts ({n})",
-        "imagen_no_disponible": "⚠️ *(La imatge generada ja no està disponible)*",
+        "boton_escuchar": "Escoltar",
+        "boton_copiar": "Copiar",
+        "boton_copiado": "Copiat",
+        "fuentes": "Fonts ({n})",
+        "imagen_no_disponible": "*(La imatge generada ja no està disponible)*",
         "resumen_pdf_defecto": "Resumeix aquest document i destaca'n els punts clau.",
         "describe_imagen_defecto": "Descriu aquesta imatge i explica amb detall què hi veus.",
         "error_transcribir_audio": "No s'ha pogut transcriure l'àudio: {error}",
@@ -742,27 +744,27 @@ TEXTOS = {
         "buscando_web": "Cercant a la web...",
         "puliendo_descripcion": "Polint la descripció...",
         "generando_imagen": "Generant la imatge...",
-        "no_pude_generar_imagen": "⚠️ No he pogut generar la imatge: {error}",
+        "no_pude_generar_imagen": "No he pogut generar la imatge: {error}",
         "leyendo_pdf": "Llegint el PDF...",
-        "no_pude_leer_pdf": "⚠️ No he pogut llegir el PDF: {error}",
+        "no_pude_leer_pdf": "No he pogut llegir el PDF: {error}",
         "generando_contenido_presentacion": "Redactant el contingut de la presentació...",
-        "creando_pptx": "Muntant la presentació...",
+        "creando_pptx": "Muntant la presentació i cercant imatges...",
         "error_generar_presentacion": "No s'ha pogut generar la presentació: {error}",
-        "no_pude_generar_presentacion": "⚠️ No he pogut generar la presentació: {error}",
-        "presentacion_generada": "📊 He creat la teva presentació: **{titulo}** ({n} diapositives).",
-        "descargar_presentacion": "⬇️ Descarregar presentació (.pptx)",
-        "pptx_no_disponible": "⚠️ *(Aquesta presentació ja no està disponible)*",
+        "no_pude_generar_presentacion": "No he pogut generar la presentació: {error}",
+        "presentacion_generada": "He creat la teva presentació: **{titulo}** ({n} diapositives).",
+        "descargar_presentacion": "Descarregar presentació (.pptx)",
+        "pptx_no_disponible": "*(Aquesta presentació ja no està disponible)*",
         "presentacion_sin_titulo": "Presentació",
         "web_no_configurada": (
-            "🌐 La cerca web encara no està configurada, així que no "
+            "La cerca web encara no està configurada, així que no "
             "puc confirmar dades de darrera hora."
         ),
-        "web_no_disponible": "🌐 No he pogut consultar la web ara mateix.",
+        "web_no_disponible": "No he pogut consultar la web ara mateix.",
         "error_413": (
-            "⚠️ **La conversa s'ha quedat massa llarga per al pla "
+            "**La conversa s'ha quedat massa llarga per al pla "
             "gratuït de Groq en aquest moment (massa tokens per "
             "minut).**\n\n"
-            "Prova de prémer '➕ Nova conversa' per començar de zero, "
+            "Prova de prémer 'Nova conversa' per començar de zero, "
             "o espera un minut i torna-ho a provar."
         ),
         "invitado": "Convidat",
@@ -773,10 +775,10 @@ TEXTOS = {
         "conversacion_sin_titulo": "Nouvelle conversation",
         "archivo_titulo": "Fichier : {nombre}",
         "ajustes_titulo": "Paramètres",
-        "tab_idioma": "🌐 Langue",
-        "tab_memoria": "🧠 Mémoire",
-        "tab_cuenta": "👤 Compte",
-        "tab_estado": "ℹ️ État",
+        "tab_idioma": "Langue",
+        "tab_memoria": "Mémoire",
+        "tab_cuenta": "Compte",
+        "tab_estado": "État",
         "idioma_caption": (
             "Choisis la langue dans laquelle tu veux qu'ORIA te "
             "réponde. Tu peux lui écrire dans n'importe quelle "
@@ -792,11 +794,11 @@ TEXTOS = {
         "guardar_memoria": "Enregistrer la mémoire",
         "memoria_guardada": "Mémoire enregistrée.",
         "cuenta_invitado": (
-            "👤 Mode invité : la connexion n'est pas encore configurée."
+            "Mode invité : la connexion n'est pas encore configurée."
         ),
         "cuenta_sesion_como": "Connecté en tant que **{nombre}**.",
         "cerrar_sesion": "Se déconnecter",
-        "eliminar_cuenta_titulo": "⚠️ Supprimer mon compte et mes données",
+        "eliminar_cuenta_titulo": "Supprimer mon compte et mes données",
         "eliminar_cuenta_caption": (
             "Supprime définitivement toutes tes conversations et ta "
             "mémoire. Cette action est irréversible."
@@ -811,11 +813,11 @@ TEXTOS = {
             "mobile, on peut utiliser 'Ajouter à l'écran d'accueil' "
             "pour que ça fonctionne comme une appli."
         ),
-        "estado_web_activa": "🌐 Recherche web active",
-        "estado_web_inactiva": "🌐 Recherche web non configurée",
-        "estado_nube": "☁️ Données enregistrées dans le cloud",
+        "estado_web_activa": "Recherche web active",
+        "estado_web_inactiva": "Recherche web non configurée",
+        "estado_nube": "Données enregistrées dans le cloud",
         "estado_servidor": (
-            "⚠️ Données enregistrées seulement sur le serveur "
+            "Données enregistrées seulement sur le serveur "
             "(peuvent être perdues au redémarrage). Configure "
             "Supabase pour les enregistrer dans le cloud."
         ),
@@ -827,18 +829,18 @@ TEXTOS = {
             "et parfois une erreur ponctuelle en cas de forte "
             "demande — la limite normale d'un outil 100% gratuit."
         ),
-        "toggle_imagen": "🎨 Image",
-        "toggle_voz": "🎤 Voix",
-        "toggle_web": "🌐 Web",
-        "toggle_presentacion": "📊 Présentation",
+        "toggle_imagen": "Image",
+        "toggle_voz": "Voix",
+        "toggle_web": "Web",
+        "toggle_presentacion": "Présentation",
         "grabar_pregunta": "Appuie pour enregistrer ta question",
         "transcribiendo_voz": "Transcription de ta voix...",
         "chat_placeholder": "Demande à ORIA, ou joins une image/PDF...",
-        "boton_escuchar": "🔊 Écouter",
-        "boton_copiar": "📋 Copier",
-        "boton_copiado": "✅ Copié",
-        "fuentes": "🔎 Sources ({n})",
-        "imagen_no_disponible": "⚠️ *(Cette image générée n'est plus disponible)*",
+        "boton_escuchar": "Écouter",
+        "boton_copiar": "Copier",
+        "boton_copiado": "Copié",
+        "fuentes": "Sources ({n})",
+        "imagen_no_disponible": "*(Cette image générée n'est plus disponible)*",
         "resumen_pdf_defecto": "Résume ce document et souligne les points clés.",
         "describe_imagen_defecto": "Décris cette image et explique en détail ce que tu vois.",
         "error_transcribir_audio": "Impossible de transcrire l'audio : {error}",
@@ -846,27 +848,27 @@ TEXTOS = {
         "buscando_web": "Recherche sur le web...",
         "puliendo_descripcion": "Amélioration de la description...",
         "generando_imagen": "Génération de l'image...",
-        "no_pude_generar_imagen": "⚠️ Je n'ai pas pu générer l'image : {error}",
+        "no_pude_generar_imagen": "Je n'ai pas pu générer l'image : {error}",
         "leyendo_pdf": "Lecture du PDF...",
-        "no_pude_leer_pdf": "⚠️ Je n'ai pas pu lire le PDF : {error}",
+        "no_pude_leer_pdf": "Je n'ai pas pu lire le PDF : {error}",
         "generando_contenido_presentacion": "Rédaction du contenu de la présentation...",
-        "creando_pptx": "Assemblage de la présentation...",
+        "creando_pptx": "Assemblage de la présentation et recherche d'images...",
         "error_generar_presentacion": "Impossible de générer la présentation : {error}",
-        "no_pude_generar_presentacion": "⚠️ Je n'ai pas pu générer la présentation : {error}",
-        "presentacion_generada": "📊 J'ai créé ta présentation : **{titulo}** ({n} diapositives).",
-        "descargar_presentacion": "⬇️ Télécharger la présentation (.pptx)",
-        "pptx_no_disponible": "⚠️ *(Cette présentation n'est plus disponible)*",
+        "no_pude_generar_presentacion": "Je n'ai pas pu générer la présentation : {error}",
+        "presentacion_generada": "J'ai créé ta présentation : **{titulo}** ({n} diapositives).",
+        "descargar_presentacion": "Télécharger la présentation (.pptx)",
+        "pptx_no_disponible": "*(Cette présentation n'est plus disponible)*",
         "presentacion_sin_titulo": "Présentation",
         "web_no_configurada": (
-            "🌐 La recherche web n'est pas encore configurée, je ne "
+            "La recherche web n'est pas encore configurée, je ne "
             "peux donc pas confirmer les données de dernière minute."
         ),
-        "web_no_disponible": "🌐 Je n'ai pas pu consulter le web pour le moment.",
+        "web_no_disponible": "Je n'ai pas pu consulter le web pour le moment.",
         "error_413": (
-            "⚠️ **La conversation est devenue trop longue pour le "
+            "**La conversation est devenue trop longue pour le "
             "forfait gratuit de Groq en ce moment (trop de tokens "
             "par minute).**\n\n"
-            "Essaie d'appuyer sur '➕ Nouvelle conversation' pour "
+            "Essaie d'appuyer sur 'Nouvelle conversation' pour "
             "repartir de zéro, ou attends une minute et réessaie."
         ),
         "invitado": "Invité",
@@ -1350,15 +1352,15 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
             "model": MODELO_GROQ,
             "stream": False,
             "temperature": 0.6,
-            "max_completion_tokens": 2200,
+            "max_completion_tokens": 2600,
             "messages": [
                 {
                     "role": "system",
                     "content": (
                         "Eres un experto creando el contenido de "
-                        "presentaciones profesionales, claras y bien "
-                        "organizadas. A partir del tema que te da el "
-                        "usuario, genera un título principal, un "
+                        "presentaciones profesionales, claras, bien "
+                        "organizadas y VISUALES. A partir del tema que te "
+                        "da el usuario, genera un título principal, un "
                         "subtítulo breve, y entre 5 y 9 diapositivas de "
                         "contenido (ajusta el número a la complejidad del "
                         "tema). Cada diapositiva debe tener un título "
@@ -1368,13 +1370,39 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
                         "diapositiva. "
                         f"Escribe TODO el contenido (títulos, subtítulo y "
                         f"puntos) en {nombre_idioma}.\n\n"
+                        "Además, para hacer la presentación más visual, "
+                        "decide para la portada y para CADA diapositiva "
+                        "si le pega bien una imagen real, y de qué tipo:\n"
+                        "- \"foto\": el contenido representa algo "
+                        "fotografiable del mundo real (personas, "
+                        "lugares, objetos, naturaleza, negocios, "
+                        "tecnología en uso, deportes, comida, etc.).\n"
+                        "- \"diagrama\": el contenido es técnico, "
+                        "científico, anatómico o histórico y se "
+                        "entiende mejor con una ilustración, esquema, "
+                        "mapa o imagen de archivo, no con una foto de "
+                        "stock genérica.\n"
+                        "- \"ninguna\": el contenido es abstracto o una "
+                        "definición y ninguna imagen real aportaría "
+                        "nada (en ese caso dejas \"imagen_query\" como "
+                        "cadena vacía). Usa \"ninguna\" con sinceridad, "
+                        "no fuerces una imagen si no pega.\n"
+                        "Para cada imagen que sí pida, escribe "
+                        "\"imagen_query\" SIEMPRE en inglés (2 a 5 "
+                        "palabras concretas, pensadas para buscar en un "
+                        "banco de fotos o en una enciclopedia visual), "
+                        "aunque el resto del contenido esté en otro "
+                        "idioma.\n\n"
                         "Responde ÚNICAMENTE con un JSON válido, sin "
                         "explicaciones, sin comillas triples ni texto "
                         "adicional antes o después, con exactamente esta "
                         "forma:\n"
                         '{"titulo": "...", "subtitulo": "...", '
+                        '"imagen_portada_query": "...", '
+                        '"estilo_imagen_portada": "foto|ninguna", '
                         '"diapositivas": [{"titulo": "...", "puntos": '
-                        '["...", "..."]}]}'
+                        '["...", "..."], "imagen_query": "...", '
+                        '"estilo_imagen": "foto|diagrama|ninguna"}]}'
                     ),
                 },
                 {"role": "user", "content": tema},
@@ -1481,11 +1509,205 @@ def _pptx_caja_texto(slide, left, top, width, height, anclaje_vertical=None):
     return marco
 
 
+def _config_pexels():
+    """Devuelve la clave de Pexels desde Secrets, o None si no está
+    configurada (es opcional: sin ella, las diapositivas que piden
+    una 'foto' se quedan solo con texto)."""
+    try:
+        clave = str(st.secrets["PEXELS_API_KEY"]).strip().strip('"').strip("'")
+        return clave or None
+    except Exception:
+        return None
+
+
+def _descargar_imagen_pexels(consulta):
+    """Busca una foto real (no generada por IA) en Pexels a partir de
+    una consulta en inglés. Devuelve los bytes de la imagen, o None
+    si no hay clave configurada, no hay resultados o algo falla."""
+
+    clave = _config_pexels()
+    if not clave:
+        return None
+
+    try:
+        respuesta = requests.get(
+            "https://api.pexels.com/v1/search",
+            headers={"Authorization": clave},
+            params={"query": consulta, "orientation": "landscape", "per_page": 3},
+            timeout=5,
+        )
+        if respuesta.status_code != 200:
+            return None
+
+        fotos = respuesta.json().get("photos", [])
+        if not fotos:
+            return None
+
+        url_imagen = fotos[0].get("src", {}).get("large")
+        if not url_imagen:
+            return None
+
+        imagen = requests.get(url_imagen, timeout=5)
+        if imagen.status_code != 200:
+            return None
+
+        return imagen.content
+
+    except Exception:
+        return None
+
+
+def _descargar_imagen_wikimedia(consulta):
+    """Busca una imagen real (foto o ilustración) en Wikimedia
+    Commons a partir de una consulta en inglés. No necesita ninguna
+    clave de API. Devuelve los bytes de la imagen, o None si no hay
+    resultados o algo falla."""
+
+    cabecera = {"User-Agent": "ORIA-App/1.0 (https://oria-chat.streamlit.app/)"}
+
+    try:
+        respuesta = requests.get(
+            "https://commons.wikimedia.org/w/api.php",
+            params={
+                "action": "query",
+                "generator": "search",
+                "gsrsearch": f"{consulta} filetype:bitmap",
+                "gsrnamespace": 6,
+                "gsrlimit": 5,
+                "prop": "imageinfo",
+                "iiprop": "url|mime",
+                "iiurlwidth": 1200,
+                "format": "json",
+            },
+            headers=cabecera,
+            timeout=5,
+        )
+        if respuesta.status_code != 200:
+            return None
+
+        paginas = respuesta.json().get("query", {}).get("pages", {})
+
+        for pagina in paginas.values():
+            info = (pagina.get("imageinfo") or [{}])[0]
+            mime = info.get("mime", "")
+            url_imagen = info.get("thumburl") or info.get("url")
+
+            if url_imagen and mime in ("image/jpeg", "image/png"):
+                imagen = requests.get(url_imagen, timeout=5, headers=cabecera)
+                if imagen.status_code == 200:
+                    return imagen.content
+
+        return None
+
+    except Exception:
+        return None
+
+
+def _obtener_imagen_para_diapositiva(consulta, estilo):
+    """Busca una imagen real según el estilo pedido por la IA:
+    'foto' -> Pexels (necesita PEXELS_API_KEY en Secrets, si no está
+    configurada se omite), 'diagrama' -> Wikimedia Commons (no
+    necesita clave). Devuelve bytes de imagen, o None."""
+
+    if not consulta or estilo not in ("foto", "diagrama"):
+        return None
+
+    if estilo == "foto":
+        return _descargar_imagen_pexels(consulta)
+
+    return _descargar_imagen_wikimedia(consulta)
+
+
+def _preparar_imagen_recortada(datos_bytes, ancho_caja, alto_caja):
+    """Recorta una foto para que encaje EXACTAMENTE en una caja con la
+    proporción ancho_caja:alto_caja, sin deformarla (se recortan los
+    bordes sobrantes, como en una revista o una web de diseño)."""
+
+    try:
+        imagen = Image.open(io.BytesIO(datos_bytes)).convert("RGB")
+    except Exception:
+        return None
+
+    ancho_img, alto_img = imagen.size
+    if ancho_img == 0 or alto_img == 0:
+        return None
+
+    relacion_caja = ancho_caja / alto_caja
+    relacion_img = ancho_img / alto_img
+
+    if relacion_img > relacion_caja:
+        nuevo_ancho = max(int(alto_img * relacion_caja), 1)
+        recorte = max((ancho_img - nuevo_ancho) // 2, 0)
+        imagen = imagen.crop((recorte, 0, recorte + nuevo_ancho, alto_img))
+    else:
+        nuevo_alto = max(int(ancho_img / relacion_caja), 1)
+        recorte = max((alto_img - nuevo_alto) // 2, 0)
+        imagen = imagen.crop((0, recorte, ancho_img, recorte + nuevo_alto))
+
+    buffer = io.BytesIO()
+    imagen.save(buffer, format="JPEG", quality=88)
+    buffer.seek(0)
+    return buffer
+
+
+def _pptx_imagen_cubrir(slide, datos_bytes, left, top, ancho_caja, alto_caja):
+    """Coloca una foto recortada para llenar exactamente la caja
+    indicada (estilo portada de revista), sin bordes ni huecos."""
+
+    buffer = _preparar_imagen_recortada(datos_bytes, ancho_caja, alto_caja)
+    if buffer is None:
+        return False
+
+    slide.shapes.add_picture(buffer, left, top, width=ancho_caja, height=alto_caja)
+    return True
+
+
+def _pptx_imagen_contener(slide, datos_bytes, left, top, ancho_caja, alto_caja):
+    """Coloca una imagen (pensada para diagramas/ilustraciones)
+    ajustada DENTRO de la caja sin recortar nada, centrada, para no
+    perder etiquetas ni detalles importantes."""
+
+    try:
+        imagen = Image.open(io.BytesIO(datos_bytes))
+        ancho_img, alto_img = imagen.size
+    except Exception:
+        return False
+
+    if ancho_img == 0 or alto_img == 0:
+        return False
+
+    relacion_caja = ancho_caja / alto_caja
+    relacion_img = ancho_img / alto_img
+
+    if relacion_img > relacion_caja:
+        ancho_final = ancho_caja
+        alto_final = max(int(ancho_caja / relacion_img), 1)
+    else:
+        alto_final = alto_caja
+        ancho_final = max(int(alto_caja * relacion_img), 1)
+
+    left_centrado = int(left + (ancho_caja - ancho_final) / 2)
+    top_centrado = int(top + (alto_caja - alto_final) / 2)
+
+    slide.shapes.add_picture(
+        io.BytesIO(datos_bytes),
+        left_centrado,
+        top_centrado,
+        width=ancho_final,
+        height=alto_final,
+    )
+    return True
+
+
 def crear_pptx(contenido, ruta):
     """Construye un archivo .pptx con un diseño propio (portada con
     color de fondo, cabeceras de acento, viñetas de marca, numeración
     y pie de página) a partir del contenido generado, y lo guarda en
-    `ruta`."""
+    `ruta`. Cuando la IA ha pedido imagen para la portada o para una
+    diapositiva, se busca una imagen real (no generada por IA, ver
+    `_obtener_imagen_para_diapositiva`) y se usa un diseño con foto;
+    si no hay imagen disponible, esa diapositiva usa el diseño de solo
+    texto de siempre."""
 
     prs = Presentation()
     prs.slide_width = Inches(13.333)
@@ -1501,33 +1723,80 @@ def crear_pptx(contenido, ruta):
 
     slide = prs.slides.add_slide(layout_en_blanco)
 
-    _pptx_rectangulo(slide, 0, 0, ancho, alto, _PPTX_COLOR_FONDO_OSCURO)
-    _pptx_rectangulo(slide, 0, 0, Inches(0.18), alto, _PPTX_COLOR_ACENTO)
+    imagen_portada = None
+    if contenido.get("estilo_imagen_portada") == "foto":
+        imagen_portada = _obtener_imagen_para_diapositiva(
+            contenido.get("imagen_portada_query", ""), "foto"
+        )
 
     titulo_txt = str(contenido.get("titulo", ""))
-    tamano_titulo = Pt(44) if len(titulo_txt) <= 40 else Pt(32)
 
-    marco_titulo = _pptx_caja_texto(
-        slide, Inches(1), Inches(2.6), ancho - Inches(2), Inches(1.8)
-    )
-    p = marco_titulo.paragraphs[0]
-    p.text = titulo_txt
-    p.font.size = tamano_titulo
-    p.font.bold = True
-    p.font.name = _PPTX_FUENTE
-    p.font.color.rgb = _PPTX_COLOR_TEXTO_CLARO
+    if imagen_portada:
+        # Diseño con foto: panel oscuro a la izquierda con el texto,
+        # foto a pantalla completa ocupando el resto (estilo revista).
+        ancho_panel = int(ancho * 0.4)
 
-    _pptx_rectangulo(slide, Inches(1), Inches(4.05), Inches(1.1), Pt(4), _PPTX_COLOR_ACENTO)
-
-    if contenido.get("subtitulo"):
-        marco_sub = _pptx_caja_texto(
-            slide, Inches(1), Inches(4.3), ancho - Inches(2), Inches(1)
+        _pptx_imagen_cubrir(
+            slide, imagen_portada, ancho_panel, 0, ancho - ancho_panel, alto
         )
-        ps = marco_sub.paragraphs[0]
-        ps.text = str(contenido["subtitulo"])
-        ps.font.size = Pt(20)
-        ps.font.name = _PPTX_FUENTE
-        ps.font.color.rgb = _PPTX_COLOR_SUBTITULO_CLARO
+        _pptx_rectangulo(slide, 0, 0, ancho_panel, alto, _PPTX_COLOR_FONDO_OSCURO)
+        _pptx_rectangulo(slide, 0, 0, Inches(0.18), alto, _PPTX_COLOR_ACENTO)
+
+        tamano_titulo = Pt(36) if len(titulo_txt) <= 40 else Pt(27)
+
+        marco_titulo = _pptx_caja_texto(
+            slide, Inches(0.8), Inches(2.6), ancho_panel - Inches(1.4), Inches(1.8)
+        )
+        p = marco_titulo.paragraphs[0]
+        p.text = titulo_txt
+        p.font.size = tamano_titulo
+        p.font.bold = True
+        p.font.name = _PPTX_FUENTE
+        p.font.color.rgb = _PPTX_COLOR_TEXTO_CLARO
+
+        _pptx_rectangulo(
+            slide, Inches(0.8), Inches(4.05), Inches(1.1), Pt(4), _PPTX_COLOR_ACENTO
+        )
+
+        if contenido.get("subtitulo"):
+            marco_sub = _pptx_caja_texto(
+                slide, Inches(0.8), Inches(4.3), ancho_panel - Inches(1.4), Inches(2)
+            )
+            ps = marco_sub.paragraphs[0]
+            ps.text = str(contenido["subtitulo"])
+            ps.font.size = Pt(16)
+            ps.font.name = _PPTX_FUENTE
+            ps.font.color.rgb = _PPTX_COLOR_SUBTITULO_CLARO
+
+    else:
+        # Diseño de siempre (solo color y texto), cuando no se ha
+        # pedido imagen para la portada o no se ha encontrado ninguna.
+        _pptx_rectangulo(slide, 0, 0, ancho, alto, _PPTX_COLOR_FONDO_OSCURO)
+        _pptx_rectangulo(slide, 0, 0, Inches(0.18), alto, _PPTX_COLOR_ACENTO)
+
+        tamano_titulo = Pt(44) if len(titulo_txt) <= 40 else Pt(32)
+
+        marco_titulo = _pptx_caja_texto(
+            slide, Inches(1), Inches(2.6), ancho - Inches(2), Inches(1.8)
+        )
+        p = marco_titulo.paragraphs[0]
+        p.text = titulo_txt
+        p.font.size = tamano_titulo
+        p.font.bold = True
+        p.font.name = _PPTX_FUENTE
+        p.font.color.rgb = _PPTX_COLOR_TEXTO_CLARO
+
+        _pptx_rectangulo(slide, Inches(1), Inches(4.05), Inches(1.1), Pt(4), _PPTX_COLOR_ACENTO)
+
+        if contenido.get("subtitulo"):
+            marco_sub = _pptx_caja_texto(
+                slide, Inches(1), Inches(4.3), ancho - Inches(2), Inches(1)
+            )
+            ps = marco_sub.paragraphs[0]
+            ps.text = str(contenido["subtitulo"])
+            ps.font.size = Pt(20)
+            ps.font.name = _PPTX_FUENTE
+            ps.font.color.rgb = _PPTX_COLOR_SUBTITULO_CLARO
 
     # --------------------------------------------
     # Diapositivas de contenido
@@ -1578,12 +1847,51 @@ def crear_pptx(contenido, ruta):
         pn.font.name = _PPTX_FUENTE
         pn.font.color.rgb = _PPTX_COLOR_SUBTITULO_CLARO
 
+        # Imagen real (si la IA la ha pedido y se ha encontrado):
+        # la diapositiva pasa a un diseño a dos columnas, con la
+        # imagen ocupando la mitad derecha.
+        estilo_imagen = diapo.get("estilo_imagen")
+        imagen_diapo = _obtener_imagen_para_diapositiva(
+            diapo.get("imagen_query", ""), estilo_imagen
+        )
+
+        if imagen_diapo:
+            margen_izq = Inches(0.9)
+            margen_der = Inches(0.7)
+            hueco = Inches(0.5)
+            espacio_total = ancho - margen_izq - margen_der - hueco
+
+            ancho_texto = int(espacio_total * 0.5)
+            ancho_imagen = espacio_total - ancho_texto
+            left_imagen = margen_izq + ancho_texto + hueco
+            top_imagen = Inches(1.55)
+            alto_imagen = alto - Inches(2.35)
+
+            if estilo_imagen == "foto":
+                _pptx_imagen_cubrir(
+                    slide, imagen_diapo, left_imagen, top_imagen, ancho_imagen, alto_imagen
+                )
+            else:
+                # Diagrama/ilustración: se ajusta sin recortar para no
+                # perder etiquetas ni detalles, sobre un fondo claro.
+                _pptx_rectangulo(
+                    slide, left_imagen, top_imagen, ancho_imagen, alto_imagen,
+                    RGBColor(0xF5, 0xF5, 0xF8),
+                )
+                _pptx_imagen_contener(
+                    slide, imagen_diapo, left_imagen, top_imagen, ancho_imagen, alto_imagen
+                )
+
+            ancho_cuerpo = ancho_texto
+        else:
+            ancho_cuerpo = ancho - Inches(1.8)
+
         # Cuerpo con los puntos, con viñeta coloreada en el acento.
         puntos = diapo.get("puntos") or []
         tamano_puntos = Pt(19) if len(puntos) <= 5 else Pt(16)
 
         marco_cuerpo = _pptx_caja_texto(
-            slide, Inches(0.9), Inches(1.7), ancho - Inches(1.8), alto - Inches(2.5)
+            slide, Inches(0.9), Inches(1.7), ancho_cuerpo, alto - Inches(2.5)
         )
 
         for indice, punto in enumerate(puntos):
@@ -1678,7 +1986,7 @@ def transcribir_audio(audio_bytes, nombre_archivo="grabacion.wav"):
 
 # Frases que indican que la pregunta depende de datos actuales
 # (deportes, noticias, precios...). Si aparecen, ORIA busca en la web
-# automáticamente; además el interruptor "🌐 Web" fuerza la búsqueda.
+# automáticamente; además el interruptor "Web" fuerza la búsqueda.
 PATRON_ACTUALIDAD = re.compile(
     r"(partido|juega|juegan|jugó|jugaron|resultado|marcador|"
     r"clasificaci[oó]n|en directo|en vivo|qui[eé]n gan[oó]|"
@@ -1835,7 +2143,7 @@ def obtener_respuesta_ia_stream(
 
     if not api_key:
         yield (
-            "⚠️ **No se ha encontrado `GROQ_API_KEY`.**\n\n"
+            "**No se ha encontrado `GROQ_API_KEY`.**\n\n"
             "Ve a **Streamlit → Settings → Secrets** y comprueba "
             "que tengas configurado:\n\n"
             "```toml\n"
@@ -1846,7 +2154,7 @@ def obtener_respuesta_ia_stream(
 
     if not api_key.startswith("gsk_"):
         yield (
-            "⚠️ **La API key de Groq no parece válida.**\n\n"
+            "**La API key de Groq no parece válida.**\n\n"
             "Debe comenzar por `gsk_`."
         )
         return
@@ -2129,7 +2437,7 @@ def obtener_respuesta_ia_stream(
         if response.status_code == 401:
 
             yield (
-                "⚠️ **Error 401: API key no válida.**\n\n"
+                "**Error 401: API key no válida.**\n\n"
                 "Comprueba que la nueva API key de Groq esté "
                 "correctamente colocada en "
                 "**Streamlit → Settings → Secrets**."
@@ -2143,7 +2451,7 @@ def obtener_respuesta_ia_stream(
         if response.status_code == 403:
 
             yield (
-                "⚠️ **Error 403: acceso denegado por Groq.**\n\n"
+                "**Error 403: acceso denegado por Groq.**\n\n"
                 "La clave existe, pero Groq está rechazando "
                 "el acceso a la petición."
             )
@@ -2171,7 +2479,7 @@ def obtener_respuesta_ia_stream(
                 error_message = response.text
 
             yield (
-                "⚠️ **Error 404 de Groq.**\n\n"
+                "**Error 404 de Groq.**\n\n"
                 f"{error_message}\n\n"
                 f"Modelo utilizado: `{modelo_usar}`"
             )
@@ -2210,7 +2518,7 @@ def obtener_respuesta_ia_stream(
             error_message = response.text
 
         yield (
-            f"⚠️ **Error de Groq ({response.status_code})**\n\n"
+            f"**Error de Groq ({response.status_code})**\n\n"
             f"{error_message}"
         )
 
@@ -2221,7 +2529,7 @@ def obtener_respuesta_ia_stream(
     except requests.exceptions.Timeout:
 
         yield (
-            "⚠️ **Groq ha tardado demasiado en responder.**\n\n"
+            "**Groq ha tardado demasiado en responder.**\n\n"
             "Vuelve a intentarlo."
         )
 
@@ -2232,7 +2540,7 @@ def obtener_respuesta_ia_stream(
     except requests.exceptions.ConnectionError:
 
         yield (
-            "⚠️ **No se ha podido conectar con Groq.**\n\n"
+            "**No se ha podido conectar con Groq.**\n\n"
             "Comprueba la conexión del servidor."
         )
 
@@ -2243,14 +2551,14 @@ def obtener_respuesta_ia_stream(
     except requests.exceptions.RequestException as e:
 
         yield (
-            "⚠️ **Error de conexión con Groq:**\n\n"
+            "**Error de conexión con Groq:**\n\n"
             f"{str(e)}"
         )
 
     except Exception as e:
 
         yield (
-            "⚠️ **Se ha producido un error inesperado:**\n\n"
+            "**Se ha producido un error inesperado:**\n\n"
             f"{str(e)}"
         )
 
@@ -2548,7 +2856,7 @@ esto: la barra lateral ya sale abierta sola. */
     }
 
     /* Cuando <body> lleva la clase "oria-sidebar-abierta" (la pone
-    nuestro botón ☰), la barra lateral entra en pantalla. */
+    nuestro botón ), la barra lateral entra en pantalla. */
     body.oria-sidebar-abierta [data-testid="stSidebar"] {
         transform: translateX(0) !important;
     }
@@ -2604,7 +2912,7 @@ st.markdown(
 
 # Barra lateral propia para el móvil (no depende de ningún control
 # interno de Streamlit, que en algunas versiones no aparece o no se
-# puede activar por CSS): un botón ☰ que añade/quita una clase en
+# puede activar por CSS): un botón que añade/quita una clase en
 # <body>, y un fondo oscuro para poder cerrarla tocando fuera.
 #
 # Importante: esto NO se hace con st.markdown (el "onclick" dentro
@@ -2749,7 +3057,7 @@ def mostrar_pantalla_login():
 
         elif st.session_state.get("_error_supabase_auth"):
             st.warning(
-                "⚠️ El login por correo no ha podido activarse:\n\n"
+                "El login por correo no ha podido activarse:\n\n"
                 f"`{st.session_state['_error_supabase_auth']}`\n\n"
                 "Comprueba que `requirements.txt` en GitHub tiene la "
                 "línea `supabase>=2.9.0` y que la última versión se "
@@ -2771,11 +3079,11 @@ def mostrar_pantalla_login():
                 _tiene_key = False
 
             st.warning(
-                "⚠️ El login por correo (crear cuenta / contraseña) "
+                "El login por correo (crear cuenta / contraseña) "
                 "todavía no está activo porque no encuentro las claves "
                 "de Supabase en los Secrets de la app:\n\n"
-                f"- `SUPABASE_URL`: {'✅ encontrada' if _tiene_url else '❌ no encontrada'}\n"
-                f"- `SUPABASE_KEY`: {'✅ encontrada' if _tiene_key else '❌ no encontrada'}\n\n"
+                f"- `SUPABASE_URL`: {'encontrada' if _tiene_url else 'no encontrada'}\n"
+                f"- `SUPABASE_KEY`: {'encontrada' if _tiene_key else 'no encontrada'}\n\n"
                 "Ve a Streamlit Cloud → tu app (arriba a la derecha, "
                 "menú ⋮) → **Settings → Secrets** y comprueba que están "
                 "escritas así, tal cual, **antes** de la línea "
@@ -3265,7 +3573,7 @@ with st.sidebar:
 
             with col_del:
 
-                if st.button("✕", key=f"del_{cid}"):
+                if st.button("", key=f"del_{cid}"):
                     chats_a_borrar.append(cid)
 
     if chats_a_borrar:
@@ -3635,7 +3943,7 @@ if entrada or texto_por_voz:
 
     texto_mostrado = user_text
     if archivo_adjunto:
-        etiqueta_archivo = f"📎 {archivo_adjunto.name}"
+        etiqueta_archivo = f"{archivo_adjunto.name}"
         texto_mostrado = (
             f"{user_text}\n\n{etiqueta_archivo}"
             if user_text else etiqueta_archivo
