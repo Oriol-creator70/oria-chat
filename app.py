@@ -2905,6 +2905,9 @@ def transcribir_audio(audio_bytes, nombre_archivo="grabacion.wav"):
 PATRON_ACTUALIDAD = re.compile(
     r"(partido|juega|juegan|jugó|jugaron|resultado|marcador|"
     r"clasificaci[oó]n|en directo|en vivo|qui[eé]n gan[oó]|"
+    r"qui[eé]n (crees que )?gana(r[aá]|ría)?|qui[eé]n va a ganar|"
+    r"favorito (para|a)|pron[oó]stico|predicci[oó]n|"
+    r"bal[oó]n de oro|mejor jugador (del a[ñn]o|actual)|"
     r"cu[aá]ndo juega|a qu[eé] hora|noticias|[uú]ltima hora|"
     r"[uú]ltimas noticias|ahora mismo|actualmente|cotizaci[oó]n|"
     r"bitcoin|el tiempo en|previsi[oó]n del tiempo|cartelera|estreno)",
@@ -3097,7 +3100,15 @@ _HERRAMIENTAS_INTENCION = [
                 "(noticias, resultados deportivos, precios, el "
                 "tiempo, eventos de hoy, cotizaciones...) que no "
                 "puedes saber de memoria porque tu entrenamiento "
-                "tiene una fecha límite."
+                "tiene una fecha límite. Esto incluye también "
+                "preguntas que piden una opinión, predicción o "
+                "pronóstico sobre algo que depende del rendimiento o "
+                "la actualidad reciente (ej. 'quién crees que ganará "
+                "el Balón de Oro', 'quién va a ganar las elecciones', "
+                "'qué equipo está mejor esta temporada'): para opinar "
+                "bien sobre eso primero hace falta saber cómo están "
+                "rindiendo ahora mismo, así que también hay que "
+                "buscarlo."
             ),
             "parameters": {
                 "type": "object",
@@ -3285,7 +3296,19 @@ def obtener_respuesta_ia_stream(
         "Explica las cosas de forma clara y útil. "
         "Nunca inventes marcadores, resultados, noticias, horarios "
         "ni precios: solo puedes darlos si aparecen en los "
-        "resultados de búsqueda web que se te proporcionan."
+        "resultados de búsqueda web que se te proporcionan. "
+        "Cuando el usuario te pida tu opinión, tu predicción o qué "
+        "crees sobre algo (quién ganará algo, qué equipo o jugador "
+        "está mejor, qué opción es mejor, etc.), tienes que mojarte: "
+        "da siempre una respuesta clara y concreta con tu mejor "
+        "valoración personal, como la daría una persona con "
+        "criterio propio, apoyándote en los datos y en los "
+        "resultados de búsqueda web si los tienes. No te escondas "
+        "detrás de frases como 'es pura especulación', 'no puedo "
+        "saberlo' o 'depende de muchos factores' para evitar "
+        "responder: puedes reconocer brevemente la incertidumbre, "
+        "pero siempre tienes que terminar comprometiéndote con una "
+        "respuesta concreta (un nombre, una opción, un favorito)."
     )
 
     if contexto_web:
