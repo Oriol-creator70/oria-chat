@@ -614,6 +614,16 @@ TEXTOS = {
             "Prueba a pulsar 'Nueva conversación' para empezar de "
             "cero, o espera un minuto y vuelve a intentarlo."
         ),
+        "error_429": (
+            "**ORIA está muy solicitada ahora mismo (se ha "
+            "alcanzado el límite gratuito de peticiones de "
+            "Groq).**\n\n"
+            "Espera un minuto y vuelve a intentarlo."
+        ),
+        "error_429_breve": (
+            "se ha alcanzado el límite gratuito de peticiones de "
+            "Groq por ahora; espera un minuto y vuelve a intentarlo"
+        ),
         "invitado": "Invitado",
     },
     "en": {
@@ -738,6 +748,15 @@ TEXTOS = {
             "free plan right now (too many tokens per minute).**\n\n"
             "Try tapping 'New chat' to start fresh, or wait a "
             "minute and try again."
+        ),
+        "error_429": (
+            "**ORIA is in high demand right now (Groq's free "
+            "request limit has been reached).**\n\n"
+            "Wait a minute and try again."
+        ),
+        "error_429_breve": (
+            "Groq's free request limit has been reached for now; "
+            "wait a minute and try again"
         ),
         "invitado": "Guest",
     },
@@ -867,6 +886,15 @@ TEXTOS = {
             "Prova de prémer 'Nova conversa' per començar de zero, "
             "o espera un minut i torna-ho a provar."
         ),
+        "error_429": (
+            "**ORIA té molta demanda ara mateix (s'ha arribat al "
+            "límit gratuït de peticions de Groq).**\n\n"
+            "Espera un minut i torna-ho a provar."
+        ),
+        "error_429_breve": (
+            "s'ha arribat al límit gratuït de peticions de Groq "
+            "per ara; espera un minut i torna-ho a provar"
+        ),
         "invitado": "Convidat",
     },
     "fr": {
@@ -995,6 +1023,15 @@ TEXTOS = {
             "par minute).**\n\n"
             "Essaie d'appuyer sur 'Nouvelle conversation' pour "
             "repartir de zéro, ou attends une minute et réessaie."
+        ),
+        "error_429": (
+            "**ORIA est très sollicitée en ce moment (la limite "
+            "gratuite de requêtes de Groq a été atteinte).**\n\n"
+            "Attends une minute et réessaie."
+        ),
+        "error_429_breve": (
+            "la limite gratuite de requêtes de Groq a été atteinte "
+            "pour l'instant ; attends une minute et réessaie"
         ),
         "invitado": "Invité",
     },
@@ -1614,6 +1651,8 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
         )
 
         if respuesta.status_code != 200:
+            if respuesta.status_code == 429:
+                return None, t("error_429_breve", idioma=idioma)
             return None, (
                 f"Groq ha devuelto el error {respuesta.status_code} al "
                 "generar el contenido."
@@ -3703,6 +3742,8 @@ def generar_contenido_documento_word(tema, idioma=IDIOMA_POR_DEFECTO):
         )
 
         if respuesta.status_code != 200:
+            if respuesta.status_code == 429:
+                return None, t("error_429_breve", idioma=idioma)
             return None, (
                 f"Groq ha devuelto el error {respuesta.status_code} al "
                 "generar el contenido."
@@ -4088,6 +4129,8 @@ def generar_contenido_hoja_calculo(tema, idioma=IDIOMA_POR_DEFECTO):
         )
 
         if respuesta.status_code != 200:
+            if respuesta.status_code == 429:
+                return None, t("error_429_breve", idioma=idioma)
             return None, (
                 f"Groq ha devuelto el error {respuesta.status_code} al "
                 "generar el contenido."
@@ -4286,6 +4329,8 @@ def generar_contenido_quiz(tema, idioma=IDIOMA_POR_DEFECTO):
         )
 
         if respuesta.status_code != 200:
+            if respuesta.status_code == 429:
+                return None, t("error_429_breve", idioma=idioma)
             return None, (
                 f"Groq ha devuelto el error {respuesta.status_code} al "
                 "generar el contenido."
@@ -4394,6 +4439,8 @@ def generar_contenido_fichas(tema, idioma=IDIOMA_POR_DEFECTO):
         )
 
         if respuesta.status_code != 200:
+            if respuesta.status_code == 429:
+                return None, t("error_429_breve", idioma=idioma)
             return None, (
                 f"Groq ha devuelto el error {respuesta.status_code} al "
                 "generar el contenido."
@@ -5008,6 +5055,18 @@ def obtener_respuesta_ia_stream(
         if response.status_code == 413:
 
             yield t("error_413", idioma=idioma)
+
+            return
+
+        # ====================================================
+        # DEMASIADAS PETICIONES (429): se ha agotado el límite
+        # gratuito de Groq por ahora. En vez del error feo que
+        # devuelve la API, mostramos un aviso amable.
+        # ====================================================
+
+        if response.status_code == 429:
+
+            yield t("error_429", idioma=idioma)
 
             return
 
