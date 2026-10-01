@@ -7,3 +7,4 @@ supabase>=2.9.0
 python-pptx
 Pillow
 reportlab
+matplotlib
