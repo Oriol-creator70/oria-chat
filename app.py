@@ -28,6 +28,12 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from docx import Document
+from docx.shared import Pt as _DOCX_PT, Inches as _DOCX_INCHES, RGBColor as _DOCX_COLOR
+from docx.enum.text import WD_ALIGN_PARAGRAPH as _DOCX_ALINEAR
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
 
 
 # ============================================================
@@ -55,6 +61,8 @@ st.set_page_config(
 CARPETA_USUARIOS = "usuarios"
 CARPETA_IMAGENES = "imagenes_generadas"
 CARPETA_PRESENTACIONES = "presentaciones_generadas"
+CARPETA_DOCUMENTOS_WORD = "documentos_generados"
+CARPETA_HOJAS_EXCEL = "hojas_generadas"
 TABLA_SUPABASE = "oria_usuarios"
 
 # Cuántos mensajes recientes mandamos como contexto a Groq.
@@ -556,6 +564,34 @@ TEXTOS = {
         "descargar_pdf": "PDF",
         "pptx_no_disponible": "*(Esta presentación ya no está disponible)*",
         "presentacion_sin_titulo": "Presentación",
+        "generando_documento_word": "Redactando el contenido del documento...",
+        "creando_docx": "Montando el documento Word...",
+        "error_generar_documento": "No se pudo generar el documento: {error}",
+        "no_pude_generar_documento": "No he podido generar el documento: {error}",
+        "documento_generado": "He creado tu documento: **{titulo}**. Aquí lo tienes, listo para descargar y editar.",
+        "descargar_documento_word": "Word (.docx)",
+        "documento_sin_titulo": "Documento",
+        "docx_no_disponible": "*(Este documento ya no está disponible)*",
+        "generando_hoja_calculo": "Montando la hoja de cálculo...",
+        "creando_xlsx": "Generando el archivo Excel...",
+        "error_generar_hoja": "No se pudo generar la hoja de cálculo: {error}",
+        "no_pude_generar_hoja": "No he podido generar la hoja de cálculo: {error}",
+        "hoja_calculo_generada": "He creado tu hoja de cálculo: **{titulo}**. Aquí la tienes, lista para descargar y editar.",
+        "descargar_hoja_calculo": "Excel (.xlsx)",
+        "hoja_sin_titulo": "Hoja de cálculo",
+        "xlsx_no_disponible": "*(Esta hoja de cálculo ya no está disponible)*",
+        "generando_quiz": "Preparando tu test...",
+        "error_generar_quiz": "No se pudo generar el test: {error}",
+        "no_pude_generar_quiz": "No he podido generar el test: {error}",
+        "comprobar_quiz": "Comprobar respuestas",
+        "respuesta_correcta_txt": "¡Correcto!",
+        "respuesta_incorrecta_txt": "Incorrecto. La respuesta correcta era: {correcta}",
+        "puntuacion_quiz": "Puntuación: {aciertos}/{total}",
+        "quiz_titulo_defecto": "Test de repaso",
+        "generando_fichas": "Preparando tus fichas de repaso...",
+        "error_generar_fichas": "No se pudieron generar las fichas: {error}",
+        "no_pude_generar_fichas": "No he podido generar las fichas: {error}",
+        "fichas_titulo_defecto": "Fichas de repaso",
         "web_no_configurada": (
             "La búsqueda web no está configurada todavía, así que "
             "no puedo confirmar datos de última hora."
@@ -653,6 +689,34 @@ TEXTOS = {
         "descargar_pdf": "PDF",
         "pptx_no_disponible": "*(This presentation is no longer available)*",
         "presentacion_sin_titulo": "Presentation",
+        "generando_documento_word": "Writing the document content...",
+        "creando_docx": "Putting the Word document together...",
+        "error_generar_documento": "Couldn't generate the document: {error}",
+        "no_pude_generar_documento": "I couldn't generate the document: {error}",
+        "documento_generado": "I've created your document: **{titulo}**. Here it is, ready to download and edit.",
+        "descargar_documento_word": "Word (.docx)",
+        "documento_sin_titulo": "Document",
+        "docx_no_disponible": "*(This document is no longer available)*",
+        "generando_hoja_calculo": "Putting the spreadsheet together...",
+        "creando_xlsx": "Generating the Excel file...",
+        "error_generar_hoja": "Couldn't generate the spreadsheet: {error}",
+        "no_pude_generar_hoja": "I couldn't generate the spreadsheet: {error}",
+        "hoja_calculo_generada": "I've created your spreadsheet: **{titulo}**. Here it is, ready to download and edit.",
+        "descargar_hoja_calculo": "Excel (.xlsx)",
+        "hoja_sin_titulo": "Spreadsheet",
+        "xlsx_no_disponible": "*(This spreadsheet is no longer available)*",
+        "generando_quiz": "Preparing your quiz...",
+        "error_generar_quiz": "Couldn't generate the quiz: {error}",
+        "no_pude_generar_quiz": "I couldn't generate the quiz: {error}",
+        "comprobar_quiz": "Check answers",
+        "respuesta_correcta_txt": "Correct!",
+        "respuesta_incorrecta_txt": "Incorrect. The correct answer was: {correcta}",
+        "puntuacion_quiz": "Score: {aciertos}/{total}",
+        "quiz_titulo_defecto": "Practice quiz",
+        "generando_fichas": "Preparing your flashcards...",
+        "error_generar_fichas": "Couldn't generate the flashcards: {error}",
+        "no_pude_generar_fichas": "I couldn't generate the flashcards: {error}",
+        "fichas_titulo_defecto": "Flashcards",
         "web_no_configurada": (
             "Web search isn't configured yet, so I can't confirm "
             "up-to-the-minute data."
@@ -751,6 +815,34 @@ TEXTOS = {
         "descargar_pdf": "PDF",
         "pptx_no_disponible": "*(Aquesta presentació ja no està disponible)*",
         "presentacion_sin_titulo": "Presentació",
+        "generando_documento_word": "Redactant el contingut del document...",
+        "creando_docx": "Muntant el document Word...",
+        "error_generar_documento": "No s'ha pogut generar el document: {error}",
+        "no_pude_generar_documento": "No he pogut generar el document: {error}",
+        "documento_generado": "He creat el teu document: **{titulo}**. Aquí el tens, llest per descarregar i editar.",
+        "descargar_documento_word": "Word (.docx)",
+        "documento_sin_titulo": "Document",
+        "docx_no_disponible": "*(Aquest document ja no està disponible)*",
+        "generando_hoja_calculo": "Muntant el full de càlcul...",
+        "creando_xlsx": "Generant l'arxiu Excel...",
+        "error_generar_hoja": "No s'ha pogut generar el full de càlcul: {error}",
+        "no_pude_generar_hoja": "No he pogut generar el full de càlcul: {error}",
+        "hoja_calculo_generada": "He creat el teu full de càlcul: **{titulo}**. Aquí el tens, llest per descarregar i editar.",
+        "descargar_hoja_calculo": "Excel (.xlsx)",
+        "hoja_sin_titulo": "Full de càlcul",
+        "xlsx_no_disponible": "*(Aquest full de càlcul ja no està disponible)*",
+        "generando_quiz": "Preparant el teu test...",
+        "error_generar_quiz": "No s'ha pogut generar el test: {error}",
+        "no_pude_generar_quiz": "No he pogut generar el test: {error}",
+        "comprobar_quiz": "Comprovar respostes",
+        "respuesta_correcta_txt": "Correcte!",
+        "respuesta_incorrecta_txt": "Incorrecte. La resposta correcta era: {correcta}",
+        "puntuacion_quiz": "Puntuació: {aciertos}/{total}",
+        "quiz_titulo_defecto": "Test de repàs",
+        "generando_fichas": "Preparant les teves fitxes de repàs...",
+        "error_generar_fichas": "No s'han pogut generar les fitxes: {error}",
+        "no_pude_generar_fichas": "No he pogut generar les fitxes: {error}",
+        "fichas_titulo_defecto": "Fitxes de repàs",
         "web_no_configurada": (
             "La cerca web encara no està configurada, així que no "
             "puc confirmar dades de darrera hora."
@@ -851,6 +943,34 @@ TEXTOS = {
         "descargar_pdf": "PDF",
         "pptx_no_disponible": "*(Cette présentation n'est plus disponible)*",
         "presentacion_sin_titulo": "Présentation",
+        "generando_documento_word": "Rédaction du contenu du document...",
+        "creando_docx": "Assemblage du document Word...",
+        "error_generar_documento": "Impossible de générer le document : {error}",
+        "no_pude_generar_documento": "Je n'ai pas pu générer le document : {error}",
+        "documento_generado": "J'ai créé ton document : **{titulo}**. Le voici, prêt à télécharger et à modifier.",
+        "descargar_documento_word": "Word (.docx)",
+        "documento_sin_titulo": "Document",
+        "docx_no_disponible": "*(Ce document n'est plus disponible)*",
+        "generando_hoja_calculo": "Assemblage de la feuille de calcul...",
+        "creando_xlsx": "Génération du fichier Excel...",
+        "error_generar_hoja": "Impossible de générer la feuille de calcul : {error}",
+        "no_pude_generar_hoja": "Je n'ai pas pu générer la feuille de calcul : {error}",
+        "hoja_calculo_generada": "J'ai créé ta feuille de calcul : **{titulo}**. La voici, prête à télécharger et à modifier.",
+        "descargar_hoja_calculo": "Excel (.xlsx)",
+        "hoja_sin_titulo": "Feuille de calcul",
+        "xlsx_no_disponible": "*(Cette feuille de calcul n'est plus disponible)*",
+        "generando_quiz": "Préparation de ton quiz...",
+        "error_generar_quiz": "Impossible de générer le quiz : {error}",
+        "no_pude_generar_quiz": "Je n'ai pas pu générer le quiz : {error}",
+        "comprobar_quiz": "Vérifier les réponses",
+        "respuesta_correcta_txt": "Correct !",
+        "respuesta_incorrecta_txt": "Incorrect. La bonne réponse était : {correcta}",
+        "puntuacion_quiz": "Score : {aciertos}/{total}",
+        "quiz_titulo_defecto": "Quiz de révision",
+        "generando_fichas": "Préparation de tes fiches de révision...",
+        "error_generar_fichas": "Impossible de générer les fiches : {error}",
+        "no_pude_generar_fichas": "Je n'ai pas pu générer les fiches : {error}",
+        "fichas_titulo_defecto": "Fiches de révision",
         "web_no_configurada": (
             "La recherche web n'est pas encore configurée, je ne "
             "peux donc pas confirmer les données de dernière minute."
@@ -3122,6 +3242,100 @@ _HERRAMIENTAS_INTENCION = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_documento_word",
+            "description": (
+                "Úsala cuando el usuario pide explícitamente un "
+                "documento, informe, memoria, apuntes o texto en "
+                "Word (.docx) que se pueda descargar y editar, no "
+                "solo una respuesta en el chat. Ej. 'hazme un "
+                "informe sobre...', 'redáctame un documento de...', "
+                "'pásamelo a Word'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tema": {
+                        "type": "string",
+                        "description": "El tema o encargo sobre el que debe tratar el documento.",
+                    }
+                },
+                "required": ["tema"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_documento_excel",
+            "description": (
+                "Úsala cuando el usuario pide explícitamente una "
+                "hoja de cálculo, una tabla, un Excel, un "
+                "presupuesto o un listado descargable en formato "
+                ".xlsx. Ej. 'hazme un Excel con...', 'monta una "
+                "tabla de...', 'un presupuesto para...'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tema": {
+                        "type": "string",
+                        "description": "El tema o encargo sobre el que debe tratar la hoja de cálculo.",
+                    }
+                },
+                "required": ["tema"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_quiz",
+            "description": (
+                "Úsala cuando el usuario pide explícitamente un "
+                "test, examen, cuestionario o preguntas tipo test "
+                "para practicar o ponerse a prueba sobre un tema de "
+                "estudio. Ej. 'hazme un test sobre...', 'ponme "
+                "preguntas de...', 'quiero practicar...'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tema": {
+                        "type": "string",
+                        "description": "El tema sobre el que deben tratar las preguntas.",
+                    }
+                },
+                "required": ["tema"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generar_fichas_estudio",
+            "description": (
+                "Úsala cuando el usuario pide explícitamente "
+                "fichas de repaso, tarjetas de estudio o "
+                "'flashcards' sobre un tema, para memorizar "
+                "conceptos (pregunta por un lado, respuesta por "
+                "otro). Ej. 'hazme fichas de...', 'tarjetas para "
+                "repasar...'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tema": {
+                        "type": "string",
+                        "description": "El tema sobre el que deben tratar las fichas.",
+                    }
+                },
+                "required": ["tema"],
+            },
+        },
+    },
 ]
 
 
@@ -3160,10 +3374,18 @@ def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO):
                         "presentación o PowerPoint, llama a "
                         "generar_presentacion. Si necesita datos "
                         "actuales de internet, llama a "
-                        "buscar_en_internet. Si es una conversación "
-                        "normal (una pregunta general, pedir una "
-                        "explicación, un saludo, charlar...), NO "
-                        "llames a ninguna herramienta."
+                        "buscar_en_internet. Si pide un documento, "
+                        "informe o texto en Word para descargar, llama "
+                        "a generar_documento_word. Si pide una hoja de "
+                        "cálculo, tabla o Excel para descargar, llama "
+                        "a generar_documento_excel. Si pide un test, "
+                        "examen o preguntas para practicar sobre un "
+                        "tema, llama a generar_quiz. Si pide fichas de "
+                        "repaso o tarjetas de estudio sobre un tema, "
+                        "llama a generar_fichas_estudio. Si es una "
+                        "conversación normal (una pregunta general, "
+                        "pedir una explicación, un saludo, charlar...), "
+                        "NO llames a ninguna herramienta."
                     ),
                 },
                 {"role": "user", "content": texto[:2000]},
@@ -3208,11 +3430,784 @@ def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO):
                 "accion": "web",
                 "parametro": argumentos.get("consulta") or texto,
             }
+        if nombre == "generar_documento_word":
+            return {
+                "accion": "word",
+                "parametro": argumentos.get("tema") or texto,
+            }
+        if nombre == "generar_documento_excel":
+            return {
+                "accion": "excel",
+                "parametro": argumentos.get("tema") or texto,
+            }
+        if nombre == "generar_quiz":
+            return {
+                "accion": "quiz",
+                "parametro": argumentos.get("tema") or texto,
+            }
+        if nombre == "generar_fichas_estudio":
+            return {
+                "accion": "fichas",
+                "parametro": argumentos.get("tema") or texto,
+            }
 
         return sin_accion
 
     except Exception:
         return sin_accion
+
+
+# ============================================================
+# 5D. DOCUMENTOS DE OFICINA Y ESTUDIO (Word, Excel, quiz, fichas)
+# ============================================================
+
+# Mismos colores de marca que las presentaciones, adaptados a cada
+# librería (python-docx y openpyxl usan sus propias clases de color).
+_DOCX_COLOR_OSCURO = _DOCX_COLOR(0x1B, 0x1B, 0x2A)
+_DOCX_COLOR_ACENTO = _DOCX_COLOR(0x6C, 0x5C, 0xE7)
+_DOCX_COLOR_TEXTO = _DOCX_COLOR(0x2B, 0x2B, 0x31)
+_DOCX_COLOR_SECUNDARIO = _DOCX_COLOR(0x8A, 0x8A, 0x96)
+
+_XLSX_COLOR_ACENTO = "FF6C5CE7"
+_XLSX_COLOR_TEXTO = "FF2B2B31"
+_XLSX_COLOR_FONDO_CLARO = "FFF6F6FA"
+_XLSX_COLOR_BLANCO = "FFFFFFFF"
+
+
+def _normalizar_quiz(contenido):
+    """Igual que _normalizar_estilos_imagen: deja el JSON del quiz a
+    prueba de pequeñas inconsistencias del modelo (un índice de
+    respuesta correcta fuera de rango, una pregunta sin opciones...),
+    para que nunca rompa la interfaz en vez de fallar en silencio."""
+
+    preguntas_validas = []
+
+    for pregunta in contenido.get("preguntas", []) or []:
+        if not isinstance(pregunta, dict):
+            continue
+
+        opciones = pregunta.get("opciones")
+        if not isinstance(opciones, list) or len(opciones) < 2:
+            continue
+
+        opciones = [str(o) for o in opciones]
+
+        try:
+            indice_correcto = int(pregunta.get("respuesta_correcta", 0))
+        except (TypeError, ValueError):
+            indice_correcto = 0
+        indice_correcto = max(0, min(indice_correcto, len(opciones) - 1))
+
+        texto_pregunta = str(pregunta.get("pregunta", "")).strip()
+        if not texto_pregunta:
+            continue
+
+        preguntas_validas.append(
+            {
+                "pregunta": texto_pregunta,
+                "opciones": opciones,
+                "respuesta_correcta": indice_correcto,
+                "explicacion": str(pregunta.get("explicacion", "")).strip(),
+            }
+        )
+
+    contenido["preguntas"] = preguntas_validas
+
+
+def _normalizar_fichas(contenido):
+    """Descarta fichas incompletas (sin pregunta o sin respuesta) para
+    que nunca aparezca una tarjeta vacía en la interfaz."""
+
+    fichas_validas = []
+
+    for ficha in contenido.get("fichas", []) or []:
+        if not isinstance(ficha, dict):
+            continue
+
+        pregunta = str(ficha.get("pregunta", "")).strip()
+        respuesta = str(ficha.get("respuesta", "")).strip()
+
+        if pregunta and respuesta:
+            fichas_validas.append({"pregunta": pregunta, "respuesta": respuesta})
+
+    contenido["fichas"] = fichas_validas
+
+
+def _normalizar_hojas_calculo(contenido):
+    """Deja solo hojas con un nombre válido (máximo 31 caracteres, que
+    es el límite de Excel) y descarta filas que no sean listas."""
+
+    hojas_validas = []
+
+    for hoja in contenido.get("hojas", []) or []:
+        if not isinstance(hoja, dict):
+            continue
+
+        nombre = str(hoja.get("nombre") or "Hoja").strip()[:31] or "Hoja"
+        columnas = [str(c) for c in (hoja.get("columnas") or [])]
+        filas = [
+            list(fila) for fila in (hoja.get("filas") or [])
+            if isinstance(fila, (list, tuple))
+        ]
+
+        hojas_validas.append({"nombre": nombre, "columnas": columnas, "filas": filas})
+
+    contenido["hojas"] = hojas_validas
+
+
+def generar_contenido_documento_word(tema, idioma=IDIOMA_POR_DEFECTO):
+    """Le pide a Groq el contenido de un documento Word (título,
+    subtítulo y secciones con párrafos y, opcionalmente, puntos clave)
+    en forma de JSON. Devuelve (contenido_dict, error)."""
+
+    api_key = obtener_api_key()
+
+    if not api_key or not api_key.startswith("gsk_"):
+        return None, "No se ha encontrado una GROQ_API_KEY válida."
+
+    nombre_idioma = NOMBRE_IDIOMA_PARA_PROMPT.get(
+        idioma, NOMBRE_IDIOMA_PARA_PROMPT[IDIOMA_POR_DEFECTO]
+    )
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": MODELO_GROQ,
+            "stream": False,
+            "temperature": 0.6,
+            "max_completion_tokens": 3200,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un experto redactando documentos e "
+                        "informes profesionales, claros y bien "
+                        "organizados, para descargar y editar en "
+                        "Word. A partir del tema o encargo que te da "
+                        "el usuario, genera:\n\n"
+                        "1. Un 'titulo' claro y concreto, y un "
+                        "'subtitulo' breve (una frase) que lo "
+                        "contextualice.\n"
+                        "2. Entre 4 y 7 'secciones', cada una con:\n"
+                        "   - 'titulo': el encabezado de esa "
+                        "sección.\n"
+                        "   - 'parrafos': 1 a 3 párrafos de texto "
+                        "corrido, bien escritos y con contenido "
+                        "real y concreto (nunca frases de relleno "
+                        "tipo 'en esta sección veremos').\n"
+                        "   - 'puntos': opcionalmente, una lista de "
+                        "2 a 5 puntos clave breves si encajan bien "
+                        "con esa sección (déjala vacía si no "
+                        "aporta nada).\n"
+                        "Debe leerse como un documento o informe "
+                        "real, no como un resumen esquemático. "
+                        f"Escribe TODO el contenido en {nombre_idioma}.\n\n"
+                        "Responde ÚNICAMENTE con un JSON válido, sin "
+                        "explicaciones, sin comillas triples ni texto "
+                        "adicional antes o después, con exactamente "
+                        "esta forma:\n"
+                        '{"titulo": "...", "subtitulo": "...", '
+                        '"secciones": [{"titulo": "...", "parrafos": '
+                        '["...", "..."], "puntos": ["...", "..."]}]}'
+                    ),
+                },
+                {"role": "user", "content": tema},
+            ],
+        }
+
+        respuesta = requests.post(
+            URL_GROQ, headers=headers, json=payload, timeout=45
+        )
+
+        if respuesta.status_code != 200:
+            return None, (
+                f"Groq ha devuelto el error {respuesta.status_code} al "
+                "generar el contenido."
+            )
+
+        texto = (
+            respuesta.json()
+            .get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+        texto = re.sub(r"^```(?:json)?\s*|\s*```$", "", texto.strip())
+
+        inicio = texto.find("{")
+        fin = texto.rfind("}")
+        if inicio != -1 and fin != -1 and fin > inicio:
+            texto = texto[inicio:fin + 1]
+
+        try:
+            contenido = json.loads(texto)
+        except json.JSONDecodeError:
+            return None, (
+                "No he podido interpretar el contenido generado. "
+                "Prueba a pedirlo de nuevo, quizás con un tema más "
+                "concreto."
+            )
+
+        if not isinstance(contenido, dict) or not contenido.get("secciones"):
+            return None, "El contenido generado no tiene el formato esperado."
+
+        return contenido, None
+
+    except requests.exceptions.Timeout:
+        return None, "Generar el contenido ha tardado demasiado."
+
+    except Exception as e:
+        return None, str(e)
+
+
+def crear_docx(contenido, ruta):
+    """Genera un documento Word (.docx) a partir del contenido de
+    generar_contenido_documento_word: portada con título y subtítulo,
+    y una sección por cada entrada de 'secciones' (título, párrafos
+    de texto corrido y, opcionalmente, una lista de puntos clave).
+    Usa los mismos colores de marca que las presentaciones."""
+
+    documento = Document()
+
+    estilo_normal = documento.styles["Normal"]
+    estilo_normal.font.name = _PPTX_FUENTE
+    estilo_normal.font.size = _DOCX_PT(11)
+    estilo_normal.font.color.rgb = _DOCX_COLOR_TEXTO
+
+    for seccion_pagina in documento.sections:
+        seccion_pagina.left_margin = _DOCX_INCHES(1)
+        seccion_pagina.right_margin = _DOCX_INCHES(1)
+        seccion_pagina.top_margin = _DOCX_INCHES(1)
+        seccion_pagina.bottom_margin = _DOCX_INCHES(1)
+
+    titulo_parrafo = documento.add_heading(contenido.get("titulo", ""), level=0)
+    for run in titulo_parrafo.runs:
+        run.font.color.rgb = _DOCX_COLOR_OSCURO
+
+    subtitulo = contenido.get("subtitulo")
+    if subtitulo:
+        parrafo_subtitulo = documento.add_paragraph(str(subtitulo))
+        if parrafo_subtitulo.runs:
+            parrafo_subtitulo.runs[0].italic = True
+            parrafo_subtitulo.runs[0].font.color.rgb = _DOCX_COLOR_SECUNDARIO
+            parrafo_subtitulo.runs[0].font.size = _DOCX_PT(13)
+
+    for seccion in contenido.get("secciones", []) or []:
+        if not isinstance(seccion, dict):
+            continue
+
+        encabezado = documento.add_heading(seccion.get("titulo", ""), level=1)
+        for run in encabezado.runs:
+            run.font.color.rgb = _DOCX_COLOR_ACENTO
+
+        for parrafo_texto in seccion.get("parrafos", []) or []:
+            parrafo = documento.add_paragraph(str(parrafo_texto))
+            parrafo.alignment = _DOCX_ALINEAR.JUSTIFY
+
+        for punto in seccion.get("puntos", []) or []:
+            documento.add_paragraph(str(punto), style="List Bullet")
+
+    documento.save(ruta)
+
+
+def generar_contenido_hoja_calculo(tema, idioma=IDIOMA_POR_DEFECTO):
+    """Le pide a Groq el contenido de una hoja de cálculo (una o dos
+    pestañas con columnas y filas de datos) en forma de JSON.
+    Devuelve (contenido_dict, error)."""
+
+    api_key = obtener_api_key()
+
+    if not api_key or not api_key.startswith("gsk_"):
+        return None, "No se ha encontrado una GROQ_API_KEY válida."
+
+    nombre_idioma = NOMBRE_IDIOMA_PARA_PROMPT.get(
+        idioma, NOMBRE_IDIOMA_PARA_PROMPT[IDIOMA_POR_DEFECTO]
+    )
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": MODELO_GROQ,
+            "stream": False,
+            "temperature": 0.5,
+            "max_completion_tokens": 3200,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un experto montando hojas de cálculo "
+                        "útiles y bien organizadas (presupuestos, "
+                        "listados, seguimientos de tareas, "
+                        "comparativas...) para descargar en Excel. "
+                        "A partir del tema o encargo del usuario, "
+                        "genera:\n\n"
+                        "1. Un 'titulo' breve para el archivo.\n"
+                        "2. Entre 1 y 2 'hojas', cada una con:\n"
+                        "   - 'nombre': nombre corto de la pestaña "
+                        "(máximo 31 caracteres).\n"
+                        "   - 'columnas': lista de cabeceras de "
+                        "columna, elegidas según lo que de verdad "
+                        "haga falta para ese tema (ej. para un "
+                        "presupuesto: 'Concepto', 'Importe'; para un "
+                        "seguimiento de tareas: 'Tarea', "
+                        "'Responsable', 'Fecha límite', 'Estado').\n"
+                        "   - 'filas': entre 5 y 15 filas de datos "
+                        "de ejemplo realistas y útiles para ese "
+                        "tema, cada una con el mismo número de "
+                        "valores que 'columnas', EN EL MISMO ORDEN.\n"
+                        "Los valores numéricos (importes, "
+                        "cantidades, porcentajes, años...) tienen "
+                        "que ir como números de verdad en el JSON "
+                        "(ej. 1200 o 12.5), nunca como texto ni con "
+                        "símbolos de moneda, para que se puedan usar "
+                        "en fórmulas de Excel. "
+                        f"Escribe TODO el contenido en {nombre_idioma}.\n\n"
+                        "Responde ÚNICAMENTE con un JSON válido, sin "
+                        "explicaciones, sin comillas triples ni texto "
+                        "adicional antes o después, con exactamente "
+                        "esta forma:\n"
+                        '{"titulo": "...", "hojas": [{"nombre": "...", '
+                        '"columnas": ["...", "..."], "filas": '
+                        '[["...", 0], ["...", 0]]}]}'
+                    ),
+                },
+                {"role": "user", "content": tema},
+            ],
+        }
+
+        respuesta = requests.post(
+            URL_GROQ, headers=headers, json=payload, timeout=45
+        )
+
+        if respuesta.status_code != 200:
+            return None, (
+                f"Groq ha devuelto el error {respuesta.status_code} al "
+                "generar el contenido."
+            )
+
+        texto = (
+            respuesta.json()
+            .get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+        texto = re.sub(r"^```(?:json)?\s*|\s*```$", "", texto.strip())
+
+        inicio = texto.find("{")
+        fin = texto.rfind("}")
+        if inicio != -1 and fin != -1 and fin > inicio:
+            texto = texto[inicio:fin + 1]
+
+        try:
+            contenido = json.loads(texto)
+        except json.JSONDecodeError:
+            return None, (
+                "No he podido interpretar el contenido generado. "
+                "Prueba a pedirlo de nuevo, quizás con un tema más "
+                "concreto."
+            )
+
+        if not isinstance(contenido, dict) or not contenido.get("hojas"):
+            return None, "El contenido generado no tiene el formato esperado."
+
+        _normalizar_hojas_calculo(contenido)
+
+        if not contenido.get("hojas"):
+            return None, "El contenido generado no tiene el formato esperado."
+
+        return contenido, None
+
+    except requests.exceptions.Timeout:
+        return None, "Generar el contenido ha tardado demasiado."
+
+    except Exception as e:
+        return None, str(e)
+
+
+def crear_xlsx(contenido, ruta):
+    """Genera una hoja de cálculo Excel (.xlsx) a partir del contenido
+    de generar_contenido_hoja_calculo: una pestaña por cada entrada de
+    'hojas', con una fila de cabecera con estilo propio y los datos
+    debajo, con las columnas ajustadas al contenido."""
+
+    libro = Workbook()
+    libro.remove(libro.active)
+
+    relleno_cabecera = PatternFill(
+        start_color=_XLSX_COLOR_ACENTO,
+        end_color=_XLSX_COLOR_ACENTO,
+        fill_type="solid",
+    )
+    relleno_zebra = PatternFill(
+        start_color=_XLSX_COLOR_FONDO_CLARO,
+        end_color=_XLSX_COLOR_FONDO_CLARO,
+        fill_type="solid",
+    )
+    fuente_cabecera = Font(bold=True, color=_XLSX_COLOR_BLANCO, size=11)
+    fuente_normal = Font(color=_XLSX_COLOR_TEXTO, size=11)
+
+    hojas = contenido.get("hojas") or [{"nombre": "Hoja1", "columnas": [], "filas": []}]
+
+    for hoja in hojas:
+        if not isinstance(hoja, dict):
+            continue
+
+        nombre_hoja = str(hoja.get("nombre") or "Hoja")[:31] or "Hoja"
+        hoja_excel = libro.create_sheet(title=nombre_hoja)
+
+        columnas = [str(c) for c in (hoja.get("columnas") or [])]
+        filas = hoja.get("filas") or []
+
+        for indice_columna, encabezado in enumerate(columnas, start=1):
+            celda = hoja_excel.cell(row=1, column=indice_columna, value=encabezado)
+            celda.font = fuente_cabecera
+            celda.fill = relleno_cabecera
+            celda.alignment = Alignment(horizontal="center", vertical="center")
+
+        for indice_fila, fila in enumerate(filas, start=2):
+            if not isinstance(fila, (list, tuple)):
+                continue
+            for indice_columna, valor in enumerate(fila, start=1):
+                celda = hoja_excel.cell(
+                    row=indice_fila, column=indice_columna, value=valor
+                )
+                celda.font = fuente_normal
+                if indice_fila % 2 == 0:
+                    celda.fill = relleno_zebra
+
+        if columnas:
+            hoja_excel.freeze_panes = "A2"
+            hoja_excel.auto_filter.ref = (
+                f"A1:{get_column_letter(len(columnas))}"
+                f"{max(len(filas) + 1, 1)}"
+            )
+
+        n_columnas = max(
+            len(columnas),
+            max(
+                (len(f) for f in filas if isinstance(f, (list, tuple))),
+                default=0,
+            ),
+        )
+        for indice_columna in range(1, n_columnas + 1):
+            letra = get_column_letter(indice_columna)
+            ancho_maximo = (
+                len(str(columnas[indice_columna - 1]))
+                if indice_columna <= len(columnas)
+                else 0
+            )
+            for fila in filas:
+                if isinstance(fila, (list, tuple)) and indice_columna <= len(fila):
+                    ancho_maximo = max(ancho_maximo, len(str(fila[indice_columna - 1])))
+            hoja_excel.column_dimensions[letra].width = min(
+                max(ancho_maximo + 4, 10), 45
+            )
+
+    if not libro.sheetnames:
+        libro.create_sheet(title="Hoja1")
+
+    libro.save(ruta)
+
+
+def generar_contenido_quiz(tema, idioma=IDIOMA_POR_DEFECTO):
+    """Le pide a Groq un test de preguntas tipo test sobre el tema, en
+    forma de JSON. Devuelve (contenido_dict, error)."""
+
+    api_key = obtener_api_key()
+
+    if not api_key or not api_key.startswith("gsk_"):
+        return None, "No se ha encontrado una GROQ_API_KEY válida."
+
+    nombre_idioma = NOMBRE_IDIOMA_PARA_PROMPT.get(
+        idioma, NOMBRE_IDIOMA_PARA_PROMPT[IDIOMA_POR_DEFECTO]
+    )
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": MODELO_GROQ,
+            "stream": False,
+            "temperature": 0.6,
+            "max_completion_tokens": 3000,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un profesor experto creando tests para "
+                        "que un estudiante practique y se ponga a "
+                        "prueba sobre un tema. A partir del tema que "
+                        "te da el usuario, genera:\n\n"
+                        "1. Un 'titulo' breve para el test.\n"
+                        "2. Entre 6 y 10 'preguntas', cada una con:\n"
+                        "   - 'pregunta': el enunciado.\n"
+                        "   - 'opciones': exactamente 4 opciones de "
+                        "respuesta, plausibles y bien diferenciadas "
+                        "(solo una correcta, sin trucos absurdos).\n"
+                        "   - 'respuesta_correcta': el ÍNDICE (0, 1, "
+                        "2 o 3) de la opción correcta dentro de "
+                        "'opciones'.\n"
+                        "   - 'explicacion': una frase breve que "
+                        "explique por qué esa es la respuesta "
+                        "correcta.\n"
+                        "Varía la dificultad y cubre los conceptos "
+                        "más importantes del tema, de lo más básico "
+                        "a lo más avanzado. "
+                        f"Escribe TODO el contenido en {nombre_idioma}.\n\n"
+                        "Responde ÚNICAMENTE con un JSON válido, sin "
+                        "explicaciones, sin comillas triples ni texto "
+                        "adicional antes o después, con exactamente "
+                        "esta forma:\n"
+                        '{"titulo": "...", "preguntas": [{"pregunta": '
+                        '"...", "opciones": ["...", "...", "...", '
+                        '"..."], "respuesta_correcta": 0, '
+                        '"explicacion": "..."}]}'
+                    ),
+                },
+                {"role": "user", "content": tema},
+            ],
+        }
+
+        respuesta = requests.post(
+            URL_GROQ, headers=headers, json=payload, timeout=45
+        )
+
+        if respuesta.status_code != 200:
+            return None, (
+                f"Groq ha devuelto el error {respuesta.status_code} al "
+                "generar el contenido."
+            )
+
+        texto = (
+            respuesta.json()
+            .get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+        texto = re.sub(r"^```(?:json)?\s*|\s*```$", "", texto.strip())
+
+        inicio = texto.find("{")
+        fin = texto.rfind("}")
+        if inicio != -1 and fin != -1 and fin > inicio:
+            texto = texto[inicio:fin + 1]
+
+        try:
+            contenido = json.loads(texto)
+        except json.JSONDecodeError:
+            return None, (
+                "No he podido interpretar el contenido generado. "
+                "Prueba a pedirlo de nuevo, quizás con un tema más "
+                "concreto."
+            )
+
+        if not isinstance(contenido, dict) or not contenido.get("preguntas"):
+            return None, "El contenido generado no tiene el formato esperado."
+
+        _normalizar_quiz(contenido)
+
+        if not contenido.get("preguntas"):
+            return None, "El contenido generado no tiene el formato esperado."
+
+        return contenido, None
+
+    except requests.exceptions.Timeout:
+        return None, "Generar el contenido ha tardado demasiado."
+
+    except Exception as e:
+        return None, str(e)
+
+
+def generar_contenido_fichas(tema, idioma=IDIOMA_POR_DEFECTO):
+    """Le pide a Groq fichas de repaso (estilo flashcard, pregunta por
+    un lado y respuesta por otro) sobre el tema, en forma de JSON.
+    Devuelve (contenido_dict, error)."""
+
+    api_key = obtener_api_key()
+
+    if not api_key or not api_key.startswith("gsk_"):
+        return None, "No se ha encontrado una GROQ_API_KEY válida."
+
+    nombre_idioma = NOMBRE_IDIOMA_PARA_PROMPT.get(
+        idioma, NOMBRE_IDIOMA_PARA_PROMPT[IDIOMA_POR_DEFECTO]
+    )
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": MODELO_GROQ,
+            "stream": False,
+            "temperature": 0.6,
+            "max_completion_tokens": 3000,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un experto creando fichas de repaso "
+                        "('flashcards') para memorizar los conceptos "
+                        "clave de un tema de estudio. A partir del "
+                        "tema que te da el usuario, genera:\n\n"
+                        "1. Un 'titulo' breve para el mazo de "
+                        "fichas.\n"
+                        "2. Entre 8 y 14 'fichas', cada una con:\n"
+                        "   - 'pregunta': un concepto, término o "
+                        "pregunta breve (lo que se ve primero).\n"
+                        "   - 'respuesta': su definición o "
+                        "respuesta, concisa y clara (lo que se ve al "
+                        "dar la vuelta a la ficha).\n"
+                        "Cubre los conceptos más importantes del "
+                        "tema, de lo más básico a lo más avanzado, "
+                        "sin repetir contenido entre fichas. "
+                        f"Escribe TODO el contenido en {nombre_idioma}.\n\n"
+                        "Responde ÚNICAMENTE con un JSON válido, sin "
+                        "explicaciones, sin comillas triples ni texto "
+                        "adicional antes o después, con exactamente "
+                        "esta forma:\n"
+                        '{"titulo": "...", "fichas": [{"pregunta": '
+                        '"...", "respuesta": "..."}]}'
+                    ),
+                },
+                {"role": "user", "content": tema},
+            ],
+        }
+
+        respuesta = requests.post(
+            URL_GROQ, headers=headers, json=payload, timeout=45
+        )
+
+        if respuesta.status_code != 200:
+            return None, (
+                f"Groq ha devuelto el error {respuesta.status_code} al "
+                "generar el contenido."
+            )
+
+        texto = (
+            respuesta.json()
+            .get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+        texto = re.sub(r"^```(?:json)?\s*|\s*```$", "", texto.strip())
+
+        inicio = texto.find("{")
+        fin = texto.rfind("}")
+        if inicio != -1 and fin != -1 and fin > inicio:
+            texto = texto[inicio:fin + 1]
+
+        try:
+            contenido = json.loads(texto)
+        except json.JSONDecodeError:
+            return None, (
+                "No he podido interpretar el contenido generado. "
+                "Prueba a pedirlo de nuevo, quizás con un tema más "
+                "concreto."
+            )
+
+        if not isinstance(contenido, dict) or not contenido.get("fichas"):
+            return None, "El contenido generado no tiene el formato esperado."
+
+        _normalizar_fichas(contenido)
+
+        if not contenido.get("fichas"):
+            return None, "El contenido generado no tiene el formato esperado."
+
+        return contenido, None
+
+    except requests.exceptions.Timeout:
+        return None, "Generar el contenido ha tardado demasiado."
+
+    except Exception as e:
+        return None, str(e)
+
+
+def _mostrar_quiz(quiz, key_prefix):
+    """Dibuja un test interactivo: una pregunta con sus opciones (sin
+    marcar ninguna por defecto), un botón para comprobar las
+    respuestas y, al pulsarlo, la corrección con la puntuación final.
+    El resultado se queda marcado como corregido en session_state para
+    que siga apareciendo aunque la página se vuelva a dibujar más
+    tarde (por ejemplo, al enviar otro mensaje)."""
+
+    st.markdown(f"**{quiz.get('titulo') or t('quiz_titulo_defecto')}**")
+
+    preguntas = quiz.get("preguntas", [])
+
+    for indice, pregunta in enumerate(preguntas):
+        st.markdown(f"{indice + 1}. {pregunta.get('pregunta', '')}")
+        st.radio(
+            f"quiz_radio_{key_prefix}_{indice}",
+            options=pregunta.get("opciones", []),
+            index=None,
+            key=f"quiz_resp_{key_prefix}_{indice}",
+            label_visibility="collapsed",
+        )
+
+    clave_resuelto = f"quiz_resuelto_{key_prefix}"
+
+    if st.button(t("comprobar_quiz"), key=f"quiz_btn_{key_prefix}"):
+        st.session_state[clave_resuelto] = True
+
+    if st.session_state.get(clave_resuelto):
+        aciertos = 0
+        for indice, pregunta in enumerate(preguntas):
+            opciones = pregunta.get("opciones", [])
+            indice_correcto = pregunta.get("respuesta_correcta", 0)
+            correcta = (
+                opciones[indice_correcto]
+                if 0 <= indice_correcto < len(opciones)
+                else None
+            )
+            elegida = st.session_state.get(f"quiz_resp_{key_prefix}_{indice}")
+
+            if elegida == correcta:
+                aciertos += 1
+                st.success(f"{indice + 1}. {t('respuesta_correcta_txt')}")
+            else:
+                st.error(
+                    f"{indice + 1}. "
+                    + t("respuesta_incorrecta_txt", correcta=correcta or "")
+                )
+
+            explicacion = pregunta.get("explicacion")
+            if explicacion:
+                st.caption(explicacion)
+
+        st.markdown(
+            f"**{t('puntuacion_quiz', aciertos=aciertos, total=len(preguntas))}**"
+        )
+
+
+def _mostrar_fichas(fichas_contenido, key_prefix):
+    """Dibuja un mazo de fichas de repaso: cada una se ve cerrada (la
+    pregunta) y se despliega para ver la respuesta, al estilo de una
+    flashcard en papel."""
+
+    st.markdown(f"**{fichas_contenido.get('titulo') or t('fichas_titulo_defecto')}**")
+
+    for indice, ficha in enumerate(fichas_contenido.get("fichas", [])):
+        with st.expander(f"{indice + 1}. {ficha.get('pregunta', '')}"):
+            st.markdown(ficha.get("respuesta", ""))
 
 
 # ============================================================
@@ -4947,6 +5942,82 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
             else:
                 st.markdown(t("pptx_no_disponible"))
 
+    # --------------------------------------------
+    # MENSAJE DE LA IA (DOCUMENTO WORD GENERADO)
+    # --------------------------------------------
+
+    elif role == "assistant" and tipo == "docx":
+
+        with st.chat_message("assistant"):
+
+            if os.path.exists(content):
+                titulo_docx = message.get("titulo", t("documento_sin_titulo"))
+
+                st.markdown(t("documento_generado", titulo=titulo_docx))
+
+                with open(content, "rb") as f:
+                    st.download_button(
+                        t("descargar_documento_word"),
+                        data=f.read(),
+                        file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
+                        mime=(
+                            "application/vnd.openxmlformats-officedocument"
+                            ".wordprocessingml.document"
+                        ),
+                        use_container_width=True,
+                        key=f"descargar_docx_{indice_mensaje}",
+                    )
+            else:
+                st.markdown(t("docx_no_disponible"))
+
+    # --------------------------------------------
+    # MENSAJE DE LA IA (HOJA DE CÁLCULO EXCEL GENERADA)
+    # --------------------------------------------
+
+    elif role == "assistant" and tipo == "xlsx":
+
+        with st.chat_message("assistant"):
+
+            if os.path.exists(content):
+                titulo_xlsx = message.get("titulo", t("hoja_sin_titulo"))
+
+                st.markdown(t("hoja_calculo_generada", titulo=titulo_xlsx))
+
+                with open(content, "rb") as f:
+                    st.download_button(
+                        t("descargar_hoja_calculo"),
+                        data=f.read(),
+                        file_name=f"{_nombre_archivo_seguro(titulo_xlsx, 'hoja_de_calculo')}.xlsx",
+                        mime=(
+                            "application/vnd.openxmlformats-officedocument"
+                            ".spreadsheetml.sheet"
+                        ),
+                        use_container_width=True,
+                        key=f"descargar_xlsx_{indice_mensaje}",
+                    )
+            else:
+                st.markdown(t("xlsx_no_disponible"))
+
+    # --------------------------------------------
+    # MENSAJE DE LA IA (TEST / QUIZ GENERADO)
+    # --------------------------------------------
+
+    elif role == "assistant" and tipo == "quiz":
+
+        with st.chat_message("assistant"):
+            identificador = message.get("identificador", indice_mensaje)
+            _mostrar_quiz(content, key_prefix=f"hist_{identificador}")
+
+    # --------------------------------------------
+    # MENSAJE DE LA IA (FICHAS DE REPASO GENERADAS)
+    # --------------------------------------------
+
+    elif role == "assistant" and tipo == "fichas":
+
+        with st.chat_message("assistant"):
+            identificador = message.get("identificador", indice_mensaje)
+            _mostrar_fichas(content, key_prefix=f"hist_{identificador}")
+
 
 # ============================================================
 # 13. INPUT DEL CHAT
@@ -4988,6 +6059,10 @@ if entrada:
     modo_imagen_auto = intencion["accion"] == "imagen"
     modo_presentacion_auto = intencion["accion"] == "presentacion"
     modo_web_auto = intencion["accion"] == "web"
+    modo_word_auto = intencion["accion"] == "word"
+    modo_excel_auto = intencion["accion"] == "excel"
+    modo_quiz_auto = intencion["accion"] == "quiz"
+    modo_fichas_auto = intencion["accion"] == "fichas"
 
     # ========================================================
     # CREAR NUEVA CONVERSACIÓN SI NO EXISTE
@@ -5245,6 +6320,200 @@ if entrada:
                         "titulo": titulo_pptx,
                         "n_diapositivas": n_diapositivas,
                     }
+
+        # ----------------------------------------------------
+        # MODO: GENERAR DOCUMENTO WORD (.docx)
+        # ----------------------------------------------------
+
+        elif modo_word_auto:
+
+            with st.spinner(t("generando_documento_word")):
+                contenido_docx, error = generar_contenido_documento_word(
+                    intencion["parametro"], idioma=st.session_state.idioma
+                )
+
+            if error or not contenido_docx:
+                st.error(t("error_generar_documento", error=error))
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": t("no_pude_generar_documento", error=error),
+                }
+            else:
+                with st.spinner(t("creando_docx")):
+                    os.makedirs(CARPETA_DOCUMENTOS_WORD, exist_ok=True)
+                    ruta_docx = os.path.join(
+                        CARPETA_DOCUMENTOS_WORD, f"{uuid.uuid4()}.docx"
+                    )
+                    try:
+                        crear_docx(contenido_docx, ruta_docx)
+                        error_docx = None
+                    except Exception as e:
+                        error_docx = str(e)
+
+                if error_docx:
+                    st.error(t("error_generar_documento", error=error_docx))
+                    respuesta_final = {
+                        "role": "assistant",
+                        "type": "text",
+                        "content": t(
+                            "no_pude_generar_documento", error=error_docx
+                        ),
+                    }
+                else:
+                    titulo_docx = contenido_docx.get(
+                        "titulo", t("documento_sin_titulo")
+                    )
+
+                    st.markdown(t("documento_generado", titulo=titulo_docx))
+
+                    with open(ruta_docx, "rb") as f:
+                        st.download_button(
+                            t("descargar_documento_word"),
+                            data=f.read(),
+                            file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
+                            mime=(
+                                "application/vnd.openxmlformats-officedocument"
+                                ".wordprocessingml.document"
+                            ),
+                            use_container_width=True,
+                        )
+
+                    respuesta_final = {
+                        "role": "assistant",
+                        "type": "docx",
+                        "content": ruta_docx,
+                        "prompt": user_text,
+                        "titulo": titulo_docx,
+                    }
+
+        # ----------------------------------------------------
+        # MODO: GENERAR HOJA DE CÁLCULO EXCEL (.xlsx)
+        # ----------------------------------------------------
+
+        elif modo_excel_auto:
+
+            with st.spinner(t("generando_hoja_calculo")):
+                contenido_xlsx, error = generar_contenido_hoja_calculo(
+                    intencion["parametro"], idioma=st.session_state.idioma
+                )
+
+            if error or not contenido_xlsx:
+                st.error(t("error_generar_hoja", error=error))
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": t("no_pude_generar_hoja", error=error),
+                }
+            else:
+                with st.spinner(t("creando_xlsx")):
+                    os.makedirs(CARPETA_HOJAS_EXCEL, exist_ok=True)
+                    ruta_xlsx = os.path.join(
+                        CARPETA_HOJAS_EXCEL, f"{uuid.uuid4()}.xlsx"
+                    )
+                    try:
+                        crear_xlsx(contenido_xlsx, ruta_xlsx)
+                        error_xlsx = None
+                    except Exception as e:
+                        error_xlsx = str(e)
+
+                if error_xlsx:
+                    st.error(t("error_generar_hoja", error=error_xlsx))
+                    respuesta_final = {
+                        "role": "assistant",
+                        "type": "text",
+                        "content": t(
+                            "no_pude_generar_hoja", error=error_xlsx
+                        ),
+                    }
+                else:
+                    titulo_xlsx = contenido_xlsx.get(
+                        "titulo", t("hoja_sin_titulo")
+                    )
+
+                    st.markdown(t("hoja_calculo_generada", titulo=titulo_xlsx))
+
+                    with open(ruta_xlsx, "rb") as f:
+                        st.download_button(
+                            t("descargar_hoja_calculo"),
+                            data=f.read(),
+                            file_name=f"{_nombre_archivo_seguro(titulo_xlsx, 'hoja_de_calculo')}.xlsx",
+                            mime=(
+                                "application/vnd.openxmlformats-officedocument"
+                                ".spreadsheetml.sheet"
+                            ),
+                            use_container_width=True,
+                        )
+
+                    respuesta_final = {
+                        "role": "assistant",
+                        "type": "xlsx",
+                        "content": ruta_xlsx,
+                        "prompt": user_text,
+                        "titulo": titulo_xlsx,
+                    }
+
+        # ----------------------------------------------------
+        # MODO: GENERAR TEST / QUIZ DE REPASO
+        # ----------------------------------------------------
+
+        elif modo_quiz_auto:
+
+            with st.spinner(t("generando_quiz")):
+                contenido_quiz, error = generar_contenido_quiz(
+                    intencion["parametro"], idioma=st.session_state.idioma
+                )
+
+            if error or not contenido_quiz:
+                st.error(t("error_generar_quiz", error=error))
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": t("no_pude_generar_quiz", error=error),
+                }
+            else:
+                identificador_quiz = str(uuid.uuid4())
+                _mostrar_quiz(contenido_quiz, key_prefix=f"nuevo_{identificador_quiz}")
+
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "quiz",
+                    "content": contenido_quiz,
+                    "prompt": user_text,
+                    "identificador": identificador_quiz,
+                }
+
+        # ----------------------------------------------------
+        # MODO: GENERAR FICHAS DE REPASO (flashcards)
+        # ----------------------------------------------------
+
+        elif modo_fichas_auto:
+
+            with st.spinner(t("generando_fichas")):
+                contenido_fichas, error = generar_contenido_fichas(
+                    intencion["parametro"], idioma=st.session_state.idioma
+                )
+
+            if error or not contenido_fichas:
+                st.error(t("error_generar_fichas", error=error))
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": t("no_pude_generar_fichas", error=error),
+                }
+            else:
+                identificador_fichas = str(uuid.uuid4())
+                _mostrar_fichas(
+                    contenido_fichas, key_prefix=f"nuevo_{identificador_fichas}"
+                )
+
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "fichas",
+                    "content": contenido_fichas,
+                    "prompt": user_text,
+                    "identificador": identificador_fichas,
+                }
 
         # ----------------------------------------------------
         # MODO: PDF ADJUNTO
