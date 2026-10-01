@@ -25,6 +25,16 @@ from reportlab.lib.colors import HexColor as _pdf_color
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as _pdf_canvas
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.lib.pagesizes import A4 as _PDF_A4
+from reportlab.lib.enums import TA_JUSTIFY as _PDF_JUSTIFICAR
+from reportlab.lib.styles import ParagraphStyle as _PdfEstiloParrafo
+from reportlab.platypus import (
+    SimpleDocTemplate as _PdfDocumento,
+    Paragraph as _PdfParrafo,
+    Spacer as _PdfEspaciador,
+    ListFlowable as _PdfListaFlotante,
+    ListItem as _PdfElementoLista,
+)
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -568,7 +578,7 @@ TEXTOS = {
         "creando_docx": "Montando el documento Word...",
         "error_generar_documento": "No se pudo generar el documento: {error}",
         "no_pude_generar_documento": "No he podido generar el documento: {error}",
-        "documento_generado": "He creado tu documento: **{titulo}**. Aquí lo tienes, listo para descargar y editar.",
+        "documento_generado": "He creado tu documento: **{titulo}**. Aquí lo tienes, puedes verlo antes de descargarlo.",
         "descargar_documento_word": "Word (.docx)",
         "documento_sin_titulo": "Documento",
         "docx_no_disponible": "*(Este documento ya no está disponible)*",
@@ -693,7 +703,7 @@ TEXTOS = {
         "creando_docx": "Putting the Word document together...",
         "error_generar_documento": "Couldn't generate the document: {error}",
         "no_pude_generar_documento": "I couldn't generate the document: {error}",
-        "documento_generado": "I've created your document: **{titulo}**. Here it is, ready to download and edit.",
+        "documento_generado": "I've created your document: **{titulo}**. Here it is, you can preview it before downloading.",
         "descargar_documento_word": "Word (.docx)",
         "documento_sin_titulo": "Document",
         "docx_no_disponible": "*(This document is no longer available)*",
@@ -819,7 +829,7 @@ TEXTOS = {
         "creando_docx": "Muntant el document Word...",
         "error_generar_documento": "No s'ha pogut generar el document: {error}",
         "no_pude_generar_documento": "No he pogut generar el document: {error}",
-        "documento_generado": "He creat el teu document: **{titulo}**. Aquí el tens, llest per descarregar i editar.",
+        "documento_generado": "He creat el teu document: **{titulo}**. Aquí el tens, el pots veure abans de descarregar-lo.",
         "descargar_documento_word": "Word (.docx)",
         "documento_sin_titulo": "Document",
         "docx_no_disponible": "*(Aquest document ja no està disponible)*",
@@ -947,7 +957,7 @@ TEXTOS = {
         "creando_docx": "Assemblage du document Word...",
         "error_generar_documento": "Impossible de générer le document : {error}",
         "no_pude_generar_documento": "Je n'ai pas pu générer le document : {error}",
-        "documento_generado": "J'ai créé ton document : **{titulo}**. Le voici, prêt à télécharger et à modifier.",
+        "documento_generado": "J'ai créé ton document : **{titulo}**. Le voici, tu peux le prévisualiser avant de le télécharger.",
         "descargar_documento_word": "Word (.docx)",
         "documento_sin_titulo": "Document",
         "docx_no_disponible": "*(Ce document n'est plus disponible)*",
@@ -3715,6 +3725,226 @@ def crear_docx(contenido, ruta):
     documento.save(ruta)
 
 
+# Estilos de párrafo para el PDF del documento (reportlab "platypus":
+# a diferencia del PDF de las presentaciones -diapositivas de tamaño
+# fijo, dibujadas a mano con canvas-, aquí el texto puede ocupar
+# varias páginas, así que usamos los "flowables" de reportlab para que
+# el propio motor se encargue de partir párrafos y saltar de página.
+_PDF_DOCX_ESTILO_TITULO = _PdfEstiloParrafo(
+    name="OriaTitulo",
+    fontName="Helvetica-Bold",
+    fontSize=24,
+    leading=28,
+    textColor=_pdf_color("#1B1B2A"),
+    spaceAfter=6,
+)
+_PDF_DOCX_ESTILO_SUBTITULO = _PdfEstiloParrafo(
+    name="OriaSubtitulo",
+    fontName="Helvetica-Oblique",
+    fontSize=12,
+    leading=16,
+    textColor=_pdf_color("#8A8A96"),
+    spaceAfter=18,
+)
+_PDF_DOCX_ESTILO_ENCABEZADO = _PdfEstiloParrafo(
+    name="OriaEncabezado",
+    fontName="Helvetica-Bold",
+    fontSize=15,
+    leading=19,
+    textColor=_pdf_color("#6C5CE7"),
+    spaceBefore=14,
+    spaceAfter=8,
+)
+_PDF_DOCX_ESTILO_PARRAFO = _PdfEstiloParrafo(
+    name="OriaParrafo",
+    fontName="Helvetica",
+    fontSize=11,
+    leading=16,
+    textColor=_pdf_color("#2B2B31"),
+    alignment=_PDF_JUSTIFICAR,
+    spaceAfter=8,
+)
+_PDF_DOCX_ESTILO_PUNTO = _PdfEstiloParrafo(
+    name="OriaPunto",
+    fontName="Helvetica",
+    fontSize=11,
+    leading=15,
+    textColor=_pdf_color("#2B2B31"),
+)
+
+
+def crear_pdf_docx(contenido, ruta):
+    """Genera el mismo documento que crear_docx pero en PDF (mismo
+    contenido y colores), usando los flowables de reportlab para que
+    el texto se reparta solo en tantas páginas como haga falta."""
+
+    historia = []
+
+    historia.append(
+        _PdfParrafo(html.escape(str(contenido.get("titulo", ""))), _PDF_DOCX_ESTILO_TITULO)
+    )
+
+    subtitulo = contenido.get("subtitulo")
+    if subtitulo:
+        historia.append(
+            _PdfParrafo(html.escape(str(subtitulo)), _PDF_DOCX_ESTILO_SUBTITULO)
+        )
+
+    for seccion in contenido.get("secciones", []) or []:
+        if not isinstance(seccion, dict):
+            continue
+
+        historia.append(
+            _PdfParrafo(
+                html.escape(str(seccion.get("titulo", ""))),
+                _PDF_DOCX_ESTILO_ENCABEZADO,
+            )
+        )
+
+        for parrafo_texto in seccion.get("parrafos", []) or []:
+            historia.append(
+                _PdfParrafo(html.escape(str(parrafo_texto)), _PDF_DOCX_ESTILO_PARRAFO)
+            )
+
+        puntos = seccion.get("puntos", []) or []
+        if puntos:
+            historia.append(
+                _PdfListaFlotante(
+                    [
+                        _PdfElementoLista(
+                            _PdfParrafo(html.escape(str(p)), _PDF_DOCX_ESTILO_PUNTO)
+                        )
+                        for p in puntos
+                    ],
+                    bulletType="bullet",
+                    leftIndent=18,
+                    spaceAfter=8,
+                )
+            )
+
+    documento_pdf = _PdfDocumento(
+        ruta,
+        pagesize=_PDF_A4,
+        leftMargin=1 * _PDF_INCH,
+        rightMargin=1 * _PDF_INCH,
+        topMargin=1 * _PDF_INCH,
+        bottomMargin=1 * _PDF_INCH,
+    )
+    documento_pdf.build(historia)
+
+
+def generar_html_documento(contenido):
+    """Genera una vista previa HTML de una sola página (como una hoja
+    de papel) para que el usuario vea qué pone el documento antes de
+    descargarlo, igual que ya se hace con las presentaciones. A
+    diferencia de las diapositivas, un documento no tiene páginas
+    fijas -el texto fluye-, así que se muestra como una página larga
+    desplazable en vez de una secuencia de diapositivas con botones."""
+
+    titulo = html.escape(str(contenido.get("titulo", "")))
+    subtitulo = contenido.get("subtitulo")
+
+    bloques_html = []
+
+    if subtitulo:
+        bloques_html.append(
+            f'<p class="oria-doc-subtitulo">{html.escape(str(subtitulo))}</p>'
+        )
+
+    for seccion in contenido.get("secciones", []) or []:
+        if not isinstance(seccion, dict):
+            continue
+
+        bloques_html.append(
+            f'<h2 class="oria-doc-encabezado">'
+            f'{html.escape(str(seccion.get("titulo", "")))}</h2>'
+        )
+
+        for parrafo_texto in seccion.get("parrafos", []) or []:
+            bloques_html.append(
+                f'<p class="oria-doc-parrafo">'
+                f'{html.escape(str(parrafo_texto))}</p>'
+            )
+
+        puntos = seccion.get("puntos", []) or []
+        if puntos:
+            items = "".join(
+                f'<li>{html.escape(str(p))}</li>' for p in puntos
+            )
+            bloques_html.append(f'<ul class="oria-doc-puntos">{items}</ul>')
+
+    contenido_html = "".join(bloques_html)
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0;
+    padding: 24px 12px;
+    background: #E9E9F0;
+    font-family: 'Calibri', 'Segoe UI', Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+  }}
+  .oria-doc-pagina {{
+    background: #FFFFFF;
+    max-width: 720px;
+    width: 100%;
+    padding: 56px 64px;
+    border-radius: 6px;
+    box-shadow: 0 2px 18px rgba(27, 27, 42, 0.12);
+  }}
+  .oria-doc-titulo {{
+    margin: 0 0 6px 0;
+    font-size: 30px;
+    font-weight: 700;
+    color: #1B1B2A;
+    border-bottom: 2px solid #6C5CE7;
+    padding-bottom: 14px;
+  }}
+  .oria-doc-subtitulo {{
+    margin: 10px 0 26px 0;
+    font-size: 15px;
+    font-style: italic;
+    color: #8A8A96;
+  }}
+  .oria-doc-encabezado {{
+    margin: 26px 0 10px 0;
+    font-size: 19px;
+    font-weight: 700;
+    color: #6C5CE7;
+  }}
+  .oria-doc-parrafo {{
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #2B2B31;
+    text-align: justify;
+  }}
+  .oria-doc-puntos {{
+    margin: 0 0 14px 0;
+    padding-left: 22px;
+  }}
+  .oria-doc-puntos li {{
+    font-size: 14px;
+    line-height: 1.6;
+    color: #2B2B31;
+    margin-bottom: 4px;
+  }}
+</style>
+</head>
+<body>
+  <div class="oria-doc-pagina">
+    <h1 class="oria-doc-titulo">{titulo}</h1>
+    {contenido_html}
+  </div>
+</body>
+</html>"""
+
+
 def generar_contenido_hoja_calculo(tema, idioma=IDIOMA_POR_DEFECTO):
     """Le pide a Groq el contenido de una hoja de cálculo (una o dos
     pestañas con columnas y filas de datos) en forma de JSON.
@@ -5952,21 +6182,48 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
 
             if os.path.exists(content):
                 titulo_docx = message.get("titulo", t("documento_sin_titulo"))
+                ruta_pdf_docx = message.get("ruta_pdf")
+                ruta_html_docx = message.get("ruta_html")
 
                 st.markdown(t("documento_generado", titulo=titulo_docx))
 
-                with open(content, "rb") as f:
-                    st.download_button(
-                        t("descargar_documento_word"),
-                        data=f.read(),
-                        file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
-                        mime=(
-                            "application/vnd.openxmlformats-officedocument"
-                            ".wordprocessingml.document"
-                        ),
-                        use_container_width=True,
-                        key=f"descargar_docx_{indice_mensaje}",
-                    )
+                if ruta_html_docx and os.path.exists(ruta_html_docx):
+                    with open(ruta_html_docx, "r", encoding="utf-8") as f:
+                        components.html(f.read(), height=600, scrolling=True)
+
+                hay_pdf_docx = bool(ruta_pdf_docx) and os.path.exists(ruta_pdf_docx)
+
+                def _boton_docx():
+                    with open(content, "rb") as f:
+                        st.download_button(
+                            t("descargar_documento_word"),
+                            data=f.read(),
+                            file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
+                            mime=(
+                                "application/vnd.openxmlformats-officedocument"
+                                ".wordprocessingml.document"
+                            ),
+                            use_container_width=True,
+                            key=f"descargar_docx_{indice_mensaje}",
+                        )
+
+                if hay_pdf_docx:
+                    st.caption(t("exportar_como"))
+                    col_word, col_pdf_docx = st.columns(2)
+                    with col_word:
+                        _boton_docx()
+                    with col_pdf_docx:
+                        with open(ruta_pdf_docx, "rb") as f:
+                            st.download_button(
+                                t("descargar_pdf"),
+                                data=f.read(),
+                                file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.pdf",
+                                mime="application/pdf",
+                                use_container_width=True,
+                                key=f"descargar_pdf_docx_{indice_mensaje}",
+                            )
+                else:
+                    _boton_docx()
             else:
                 st.markdown(t("docx_no_disponible"))
 
@@ -6361,28 +6618,65 @@ if entrada:
                         ),
                     }
                 else:
+                    with st.spinner(t("creando_exportables")):
+                        ruta_pdf_docx = os.path.join(
+                            CARPETA_DOCUMENTOS_WORD, f"{uuid.uuid4()}.pdf"
+                        )
+                        ruta_html_docx = os.path.join(
+                            CARPETA_DOCUMENTOS_WORD, f"{uuid.uuid4()}.html"
+                        )
+                        try:
+                            crear_pdf_docx(contenido_docx, ruta_pdf_docx)
+                        except Exception:
+                            ruta_pdf_docx = None
+                        try:
+                            html_preview_docx = generar_html_documento(contenido_docx)
+                            with open(ruta_html_docx, "w", encoding="utf-8") as f:
+                                f.write(html_preview_docx)
+                        except Exception:
+                            ruta_html_docx = None
+
                     titulo_docx = contenido_docx.get(
                         "titulo", t("documento_sin_titulo")
                     )
 
                     st.markdown(t("documento_generado", titulo=titulo_docx))
 
-                    with open(ruta_docx, "rb") as f:
-                        st.download_button(
-                            t("descargar_documento_word"),
-                            data=f.read(),
-                            file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
-                            mime=(
-                                "application/vnd.openxmlformats-officedocument"
-                                ".wordprocessingml.document"
-                            ),
-                            use_container_width=True,
-                        )
+                    if ruta_html_docx and os.path.exists(ruta_html_docx):
+                        with open(ruta_html_docx, "r", encoding="utf-8") as f:
+                            components.html(f.read(), height=600, scrolling=True)
+
+                    st.caption(t("exportar_como"))
+                    col_word, col_pdf_docx = st.columns(2)
+                    with col_word:
+                        with open(ruta_docx, "rb") as f:
+                            st.download_button(
+                                t("descargar_documento_word"),
+                                data=f.read(),
+                                file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
+                                mime=(
+                                    "application/vnd.openxmlformats-officedocument"
+                                    ".wordprocessingml.document"
+                                ),
+                                use_container_width=True,
+                            )
+                    if ruta_pdf_docx and os.path.exists(ruta_pdf_docx):
+                        with col_pdf_docx:
+                            with open(ruta_pdf_docx, "rb") as f:
+                                st.download_button(
+                                    t("descargar_pdf"),
+                                    data=f.read(),
+                                    file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True,
+                                )
 
                     respuesta_final = {
                         "role": "assistant",
                         "type": "docx",
                         "content": ruta_docx,
+                        "ruta_pdf": ruta_pdf_docx,
+                        "ruta_html": ruta_html_docx,
                         "prompt": user_text,
                         "titulo": titulo_docx,
                     }
