@@ -1320,6 +1320,33 @@ def generar_imagen_ia(prompt_imagen, intentos=3):
     return None, ultimo_error
 
 
+def _normalizar_estilos_imagen(contenido):
+    """La IA debería devolver siempre 'estilo_imagen' en minúsculas y
+    sin espacios ('foto', 'diagrama', 'grafico' o 'ninguna'), pero los
+    modelos de lenguaje no son perfectamente consistentes (a veces
+    escriben 'Foto', 'Foto ' o similar). Como el resto del código
+    compara ese valor con '==', una sola mayúscula de más bastaba para
+    que la diapositiva se quedara sin imagen en silencio, sin ningún
+    error. Esta función normaliza esos valores IN-PLACE justo después
+    de parsear el JSON, para que esa comparación nunca vuelva a
+    fallar por un problema de formato."""
+
+    def _limpiar(valor, permitidos):
+        valor = str(valor or "").strip().lower()
+        return valor if valor in permitidos else "ninguna"
+
+    contenido["estilo_imagen_portada"] = _limpiar(
+        contenido.get("estilo_imagen_portada"), {"foto", "ninguna"}
+    )
+
+    for diapo in contenido.get("diapositivas", []):
+        if isinstance(diapo, dict):
+            diapo["estilo_imagen"] = _limpiar(
+                diapo.get("estilo_imagen"),
+                {"foto", "diagrama", "grafico", "ninguna"},
+            )
+
+
 def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
     """Le pide a Groq el contenido de una presentación (título,
     subtítulo, categorías/kicker y diapositivas con sus puntos en
@@ -1491,6 +1518,8 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
             "diapositivas"
         ):
             return None, "El contenido generado no tiene el formato esperado."
+
+        _normalizar_estilos_imagen(contenido)
 
         return contenido, None
 
