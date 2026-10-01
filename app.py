@@ -25,6 +25,9 @@ from reportlab.lib.colors import HexColor as _pdf_color
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as _pdf_canvas
 from reportlab.pdfbase.pdfmetrics import stringWidth
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 
 # ============================================================
@@ -1342,7 +1345,7 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
             "model": MODELO_GROQ,
             "stream": False,
             "temperature": 0.6,
-            "max_completion_tokens": 3200,
+            "max_completion_tokens": 3800,
             "messages": [
                 {
                     "role": "system",
@@ -1380,7 +1383,8 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
                         "incluidas las categorías.\n\n"
                         "Además, para hacer la presentación más visual, "
                         "decide para la portada y para CADA diapositiva "
-                        "si le pega bien una imagen real, y de qué tipo:\n"
+                        "si le pega bien una imagen real, un gráfico, o "
+                        "ninguna de las dos cosas:\n"
                         "- \"foto\": el contenido representa algo "
                         "fotografiable del mundo real (personas, "
                         "lugares, objetos, naturaleza, negocios, "
@@ -1390,17 +1394,40 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
                         "entiende mejor con una ilustración, esquema, "
                         "mapa o imagen de archivo, no con una foto de "
                         "stock genérica.\n"
+                        "- \"grafico\": la diapositiva compara cifras "
+                        "(evolución en el tiempo, tamaño de mercado, "
+                        "porcentajes, ranking entre varias categorías, "
+                        "crecimiento año a año, etc.). ES LA OPCIÓN "
+                        "PREFERIDA siempre que haya datos numéricos "
+                        "comparables, en vez de una foto genérica: un "
+                        "gráfico real con las cifras aporta mucho más "
+                        "que una foto de archivo. En este caso añade "
+                        "también un objeto \"grafico\" con: \"tipo\" "
+                        "(\"barras\" para comparar categorías, o "
+                        "\"lineas\" para una evolución en el tiempo), "
+                        "\"categorias\" (lista de 3 a 6 etiquetas "
+                        "cortas: años, países, nombres...), \"valores\" "
+                        "(la misma cantidad de números, SOLO números, "
+                        "sin texto ni símbolos) y \"sufijo\" (opcional, "
+                        "ej. \"%\", \"M\", \"M€\", para mostrar junto a "
+                        "cada valor). Usa cifras razonables y conocidas; "
+                        "si no las sabes con precisión, da una "
+                        "estimación sensata en vez de inventar "
+                        "decimales falsos.\n"
                         "- \"ninguna\": el contenido es abstracto o una "
-                        "definición y ninguna imagen real aportaría "
-                        "nada (en ese caso dejas \"imagen_query\" como "
-                        "cadena vacía). Usa \"ninguna\" con sinceridad, "
-                        "no fuerces una imagen si no pega.\n"
-                        "Para cada imagen que sí pida, escribe "
-                        "\"imagen_query\" SIEMPRE en inglés (2 a 5 "
-                        "palabras concretas, pensadas para buscar en un "
-                        "banco de fotos o en una enciclopedia visual), "
-                        "aunque el resto del contenido esté en otro "
-                        "idioma.\n\n"
+                        "definición y ni una imagen ni un gráfico "
+                        "aportarían nada (en ese caso deja "
+                        "\"imagen_query\" como cadena vacía). Usa "
+                        "\"ninguna\" con sinceridad, no fuerces una "
+                        "imagen o un gráfico si no pega.\n"
+                        "Para cada imagen que pidas (\"foto\" o "
+                        "\"diagrama\"), escribe \"imagen_query\" "
+                        "SIEMPRE en inglés (2 a 5 palabras concretas, "
+                        "pensadas para buscar en un banco de fotos o en "
+                        "una enciclopedia visual), aunque el resto del "
+                        "contenido esté en otro idioma. La portada solo "
+                        "admite \"foto\" o \"ninguna\" (nunca gráfico "
+                        "en la portada).\n\n"
                         "Responde ÚNICAMENTE con un JSON válido, sin "
                         "explicaciones, sin comillas triples ni texto "
                         "adicional antes o después, con exactamente esta "
@@ -1412,7 +1439,10 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
                         '"diapositivas": [{"categoria": "...", '
                         '"titulo": "...", "puntos": [{"titulo": "...", '
                         '"detalle": "..."}], "imagen_query": "...", '
-                        '"estilo_imagen": "foto|diagrama|ninguna"}]}'
+                        '"estilo_imagen": "foto|diagrama|grafico|ninguna", '
+                        '"grafico": {"tipo": "barras|lineas", '
+                        '"categorias": ["...", "..."], '
+                        '"valores": [0, 0], "sufijo": "..."}}]}'
                     ),
                 },
                 {"role": "user", "content": tema},
@@ -1618,6 +1648,56 @@ def _descargar_imagen_pexels(consulta):
         return None
 
 
+def _config_unsplash():
+    """Devuelve la clave de Unsplash desde Secrets, o None si no está
+    configurada. Es la alternativa a Pexels (ahora mismo Pexels tiene
+    la emisión de claves nuevas pausada): en unsplash.com/developers,
+    'New Application', y la 'Access Key' funciona al momento, gratis y
+    sin tarjeta, sin esperar ninguna aprobación."""
+    try:
+        clave = str(st.secrets["UNSPLASH_ACCESS_KEY"]).strip().strip('"').strip("'")
+        return clave or None
+    except Exception:
+        return None
+
+
+def _descargar_imagen_unsplash(consulta):
+    """Busca una foto real (no generada por IA) en Unsplash a partir
+    de una consulta en inglés. Devuelve los bytes de la imagen, o
+    None si no hay clave configurada, no hay resultados o algo falla."""
+
+    clave = _config_unsplash()
+    if not clave:
+        return None
+
+    try:
+        respuesta = requests.get(
+            "https://api.unsplash.com/search/photos",
+            headers={"Authorization": f"Client-ID {clave}"},
+            params={"query": consulta, "orientation": "landscape", "per_page": 3},
+            timeout=5,
+        )
+        if respuesta.status_code != 200:
+            return None
+
+        resultados = respuesta.json().get("results", [])
+        if not resultados:
+            return None
+
+        url_imagen = resultados[0].get("urls", {}).get("regular")
+        if not url_imagen:
+            return None
+
+        imagen = requests.get(url_imagen, timeout=5)
+        if imagen.status_code != 200:
+            return None
+
+        return imagen.content
+
+    except Exception:
+        return None
+
+
 def _descargar_imagen_wikimedia(consulta):
     """Busca una imagen real (foto o ilustración) en Wikimedia
     Commons a partir de una consulta en inglés. No necesita ninguna
@@ -1666,27 +1746,155 @@ def _descargar_imagen_wikimedia(consulta):
 
 def _obtener_imagen_para_diapositiva(consulta, estilo):
     """Busca una imagen real según el estilo pedido por la IA:
-    'foto' -> Pexels (necesita PEXELS_API_KEY en Secrets, si no está
-    configurada se omite), 'diagrama' -> Wikimedia Commons (no
-    necesita clave). Devuelve bytes de imagen, o None."""
+    'foto' -> primero Pexels y, si no hay clave o no encuentra nada,
+    Unsplash como alternativa (las dos son opcionales: si ninguna
+    está configurada, la diapositiva se queda solo con texto),
+    'diagrama' -> Wikimedia Commons (no necesita clave). Devuelve
+    bytes de imagen, o None."""
 
     if not consulta or estilo not in ("foto", "diagrama"):
         return None
 
     if estilo == "foto":
-        return _descargar_imagen_pexels(consulta)
+        return _descargar_imagen_pexels(consulta) or _descargar_imagen_unsplash(consulta)
 
     return _descargar_imagen_wikimedia(consulta)
 
 
+_GRAFICO_COLOR_ACENTO = "#6C5CE7"
+_GRAFICO_COLOR_TEXTO = "#2B2B31"
+_GRAFICO_COLOR_SECUNDARIO = "#8A8A96"
+_GRAFICO_COLOR_REJILLA = "#E3E3E8"
+
+
+def _grafico_formatear_valor(valor, sufijo):
+    """Da formato 'humano' a un número para las etiquetas del gráfico
+    (sin decimales de más, con coma como separador si hace falta)."""
+
+    try:
+        valor = float(valor)
+    except (TypeError, ValueError):
+        return str(valor)
+
+    if valor == int(valor):
+        texto = f"{int(valor):,}".replace(",", ".")
+    else:
+        texto = f"{valor:,.1f}".replace(",", "·").replace(".", ",").replace("·", ".")
+
+    return f"{texto}{sufijo}"
+
+
+def _generar_grafico_png(grafico, ancho_px=980, alto_px=760):
+    """Genera un gráfico de barras o líneas REAL (con matplotlib, sin
+    depender de ningún servicio externo) a partir de las cifras que ha
+    dado la IA, con la misma paleta de color que el resto de la
+    presentación (morado de acento, texto gris oscuro). Solo una serie
+    -sin leyenda, ya que el título ya dice qué se representa- con las
+    marcas finas y las etiquetas de valor que recomienda un buen
+    diseño de datos. Devuelve los bytes PNG, o None si los datos que
+    ha dado la IA no son válidos."""
+
+    if not isinstance(grafico, dict):
+        return None
+
+    categorias = [str(c) for c in (grafico.get("categorias") or [])]
+    valores_raw = grafico.get("valores") or []
+
+    try:
+        valores = [float(v) for v in valores_raw]
+    except (TypeError, ValueError):
+        return None
+
+    if not categorias or not valores or len(categorias) != len(valores):
+        return None
+
+    tipo = grafico.get("tipo") if grafico.get("tipo") in ("barras", "lineas") else "barras"
+    sufijo = str(grafico.get("sufijo", "") or "")
+
+    try:
+        dpi = 150
+        fig, ax = plt.subplots(figsize=(ancho_px / dpi, alto_px / dpi), dpi=dpi)
+        fig.patch.set_facecolor("white")
+        ax.set_facecolor("white")
+
+        maximo = max(valores)
+        minimo = min(valores)
+        posiciones = list(range(len(categorias)))
+
+        if tipo == "lineas":
+            ax.plot(
+                posiciones, valores, color=_GRAFICO_COLOR_ACENTO, linewidth=3,
+                solid_capstyle="round", solid_joinstyle="round", marker="o",
+                markersize=9, markerfacecolor=_GRAFICO_COLOR_ACENTO,
+                markeredgecolor="white", markeredgewidth=2, zorder=3,
+            )
+            ax.fill_between(
+                posiciones, valores, minimo - (maximo - minimo) * 0.15 if maximo != minimo else 0,
+                color=_GRAFICO_COLOR_ACENTO, alpha=0.08, zorder=1,
+            )
+            colchon = (maximo - minimo) * 0.28 or maximo * 0.28 or 1
+            ax.set_ylim(minimo - colchon * 0.3, maximo + colchon)
+            for i, v in enumerate(valores):
+                if i == len(valores) - 1 or v == maximo:
+                    ax.annotate(
+                        _grafico_formatear_valor(v, sufijo), (i, v),
+                        textcoords="offset points", xytext=(0, 13),
+                        ha="center", fontsize=14, fontweight="bold",
+                        color=_GRAFICO_COLOR_TEXTO,
+                    )
+        else:
+            ax.bar(
+                posiciones, valores, color=_GRAFICO_COLOR_ACENTO, width=0.5,
+                zorder=3,
+            )
+            ax.set_ylim(0, maximo * 1.24 if maximo > 0 else 1)
+            for i, v in enumerate(valores):
+                ax.annotate(
+                    _grafico_formatear_valor(v, sufijo), (i, v),
+                    textcoords="offset points", xytext=(0, 7),
+                    ha="center", fontsize=14, fontweight="bold",
+                    color=_GRAFICO_COLOR_TEXTO,
+                )
+
+        ax.set_xticks(posiciones)
+        ax.set_xticklabels(categorias, fontsize=13, color=_GRAFICO_COLOR_SECUNDARIO)
+        ax.tick_params(axis="x", length=0)
+        ax.tick_params(axis="y", length=0, labelleft=False)
+        for lado in ("top", "right", "left"):
+            ax.spines[lado].set_visible(False)
+        ax.spines["bottom"].set_color(_GRAFICO_COLOR_REJILLA)
+        ax.grid(axis="y", color=_GRAFICO_COLOR_REJILLA, linewidth=1, zorder=0)
+        ax.set_axisbelow(True)
+
+        titulo_grafico = str(grafico.get("titulo", "") or "")
+        if titulo_grafico:
+            ax.set_title(
+                titulo_grafico, fontsize=15, fontweight="bold",
+                color=_GRAFICO_COLOR_TEXTO, pad=16, loc="left",
+            )
+
+        fig.tight_layout(pad=1.3)
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format="png", dpi=dpi, facecolor="white")
+        plt.close(fig)
+        return buffer.getvalue()
+    except Exception:
+        try:
+            plt.close(fig)
+        except Exception:
+            pass
+        return None
+
+
 def obtener_imagenes_presentacion(contenido):
-    """Descarga, UNA sola vez, todas las imágenes que la IA ha pedido
-    para la portada y cada diapositiva, para poder reutilizar los
-    mismos bytes en el PPTX, el PDF y la vista previa sin repetir las
-    llamadas a Pexels/Wikimedia tres veces. Devuelve un dict:
+    """Descarga o genera, UNA sola vez, todas las imágenes/gráficos que
+    la IA ha pedido para la portada y cada diapositiva, para poder
+    reutilizar los mismos bytes en el PPTX, el PDF y la vista previa
+    sin repetir el trabajo tres veces. Devuelve un dict:
     {"portada": (bytes, estilo) | None, 0: (bytes, estilo) | None,
     1: ..., ...} (las claves numéricas son el índice de cada
-    diapositiva en la lista "diapositivas")."""
+    diapositiva en la lista "diapositivas"). El estilo "grafico" se
+    genera localmente con matplotlib en vez de buscarse por internet."""
 
     cache = {}
 
@@ -1698,7 +1906,10 @@ def obtener_imagenes_presentacion(contenido):
 
     for indice, diapo in enumerate(contenido.get("diapositivas", [])):
         estilo = diapo.get("estilo_imagen")
-        datos = _obtener_imagen_para_diapositiva(diapo.get("imagen_query", ""), estilo)
+        if estilo == "grafico":
+            datos = _generar_grafico_png(diapo.get("grafico"))
+        else:
+            datos = _obtener_imagen_para_diapositiva(diapo.get("imagen_query", ""), estilo)
         cache[indice] = (datos, estilo) if datos else None
 
     return cache
