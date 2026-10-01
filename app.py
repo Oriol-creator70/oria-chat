@@ -25,6 +25,15 @@ from reportlab.lib.colors import HexColor as _pdf_color
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as _pdf_canvas
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.lib.pagesizes import A4 as _PDF_A4
+from reportlab.lib.enums import TA_JUSTIFY as _PDF_JUSTIFICAR
+from reportlab.lib.styles import ParagraphStyle as _PdfEstiloParrafo
+from reportlab.platypus import (
+    SimpleDocTemplate as _PdfDocumento,
+    Paragraph as _PdfParrafo,
+    ListFlowable as _PdfListaFlotante,
+    ListItem as _PdfElementoLista,
+)
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -482,6 +491,7 @@ TEXTOS = {
         "tagline_bienvenida": "¿En qué te puedo ayudar hoy?",
         "nueva_conversacion": "＋  Nueva conversación",
         "conversacion_sin_titulo": "Nueva conversación",
+        "eliminar_conversacion_tooltip": "Eliminar esta conversación",
         "archivo_titulo": "Archivo: {nombre}",
         "ajustes_titulo": "Ajustes",
         "tab_idioma": "Idioma",
@@ -568,7 +578,7 @@ TEXTOS = {
         "creando_docx": "Montando el documento Word...",
         "error_generar_documento": "No se pudo generar el documento: {error}",
         "no_pude_generar_documento": "No he podido generar el documento: {error}",
-        "documento_generado": "He creado tu documento: **{titulo}**. Aquí lo tienes, listo para descargar y editar.",
+        "documento_generado": "He creado tu documento: **{titulo}**. Aquí lo tienes, puedes verlo antes de descargarlo.",
         "descargar_documento_word": "Word (.docx)",
         "documento_sin_titulo": "Documento",
         "docx_no_disponible": "*(Este documento ya no está disponible)*",
@@ -610,6 +620,7 @@ TEXTOS = {
         "tagline_bienvenida": "What can I help you with today?",
         "nueva_conversacion": "＋  New chat",
         "conversacion_sin_titulo": "New chat",
+        "eliminar_conversacion_tooltip": "Delete this conversation",
         "archivo_titulo": "File: {nombre}",
         "ajustes_titulo": "Settings",
         "tab_idioma": "Language",
@@ -693,7 +704,7 @@ TEXTOS = {
         "creando_docx": "Putting the Word document together...",
         "error_generar_documento": "Couldn't generate the document: {error}",
         "no_pude_generar_documento": "I couldn't generate the document: {error}",
-        "documento_generado": "I've created your document: **{titulo}**. Here it is, ready to download and edit.",
+        "documento_generado": "I've created your document: **{titulo}**. Here it is, you can preview it before downloading.",
         "descargar_documento_word": "Word (.docx)",
         "documento_sin_titulo": "Document",
         "docx_no_disponible": "*(This document is no longer available)*",
@@ -734,6 +745,7 @@ TEXTOS = {
         "tagline_bienvenida": "En què et puc ajudar avui?",
         "nueva_conversacion": "＋  Nova conversa",
         "conversacion_sin_titulo": "Nova conversa",
+        "eliminar_conversacion_tooltip": "Eliminar aquesta conversa",
         "archivo_titulo": "Fitxer: {nombre}",
         "ajustes_titulo": "Ajustos",
         "tab_idioma": "Idioma",
@@ -819,7 +831,7 @@ TEXTOS = {
         "creando_docx": "Muntant el document Word...",
         "error_generar_documento": "No s'ha pogut generar el document: {error}",
         "no_pude_generar_documento": "No he pogut generar el document: {error}",
-        "documento_generado": "He creat el teu document: **{titulo}**. Aquí el tens, llest per descarregar i editar.",
+        "documento_generado": "He creat el teu document: **{titulo}**. Aquí el tens, el pots veure abans de descarregar-lo.",
         "descargar_documento_word": "Word (.docx)",
         "documento_sin_titulo": "Document",
         "docx_no_disponible": "*(Aquest document ja no està disponible)*",
@@ -861,6 +873,7 @@ TEXTOS = {
         "tagline_bienvenida": "Comment puis-je t'aider aujourd'hui ?",
         "nueva_conversacion": "＋  Nouvelle conversation",
         "conversacion_sin_titulo": "Nouvelle conversation",
+        "eliminar_conversacion_tooltip": "Supprimer cette conversation",
         "archivo_titulo": "Fichier : {nombre}",
         "ajustes_titulo": "Paramètres",
         "tab_idioma": "Langue",
@@ -947,7 +960,7 @@ TEXTOS = {
         "creando_docx": "Assemblage du document Word...",
         "error_generar_documento": "Impossible de générer le document : {error}",
         "no_pude_generar_documento": "Je n'ai pas pu générer le document : {error}",
-        "documento_generado": "J'ai créé ton document : **{titulo}**. Le voici, prêt à télécharger et à modifier.",
+        "documento_generado": "J'ai créé ton document : **{titulo}**. Le voici, tu peux le prévisualiser avant de le télécharger.",
         "descargar_documento_word": "Word (.docx)",
         "documento_sin_titulo": "Document",
         "docx_no_disponible": "*(Ce document n'est plus disponible)*",
@@ -3339,13 +3352,64 @@ _HERRAMIENTAS_INTENCION = [
 ]
 
 
-def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO):
+def _describir_ultimo_generado(mensajes):
+    """Mira hacia atrás en el historial del chat actual y, si la IA
+    generó hace poco una presentación, documento, hoja de cálculo,
+    test, fichas o imagen, devuelve una frase corta que lo describe
+    (para dar contexto a detectar_intencion y que un 'hazlo de nuevo'
+    se pueda relacionar con ello). Devuelve None si no hay nada así
+    entre los últimos mensajes."""
+
+    if not mensajes:
+        return None
+
+    for msg in reversed(mensajes[-8:]):
+        if not isinstance(msg, dict) or msg.get("role") != "assistant":
+            continue
+
+        tipo = msg.get("type")
+
+        if tipo == "pptx":
+            return f'una presentación titulada "{msg.get("titulo", "")}"'
+        if tipo == "docx":
+            return f'un documento Word titulado "{msg.get("titulo", "")}"'
+        if tipo == "xlsx":
+            return (
+                "una hoja de cálculo Excel titulada "
+                f'"{msg.get("titulo", "")}"'
+            )
+        if tipo == "quiz":
+            datos = msg.get("content")
+            datos = datos if isinstance(datos, dict) else {}
+            return f'un test titulado "{datos.get("titulo", "")}"'
+        if tipo == "fichas":
+            datos = msg.get("content")
+            datos = datos if isinstance(datos, dict) else {}
+            return (
+                "unas fichas de repaso tituladas "
+                f'"{datos.get("titulo", "")}"'
+            )
+        if tipo == "image":
+            return f'una imagen de "{msg.get("prompt", "")}"'
+
+    return None
+
+
+def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO, ultimo_generado=None):
     """Le pregunta a Groq (con function calling) qué acción encaja con
-    el mensaje del usuario -imagen, presentación o búsqueda web-, para
-    activarla automáticamente sin botones. Si algo falla o no aplica
-    ninguna, se trata como conversación normal (nunca bloquea el chat).
-    Devuelve {"accion": "imagen"|"presentacion"|"web"|"ninguna",
-    "parametro": "<texto limpio para esa acción>"}."""
+    el mensaje del usuario -imagen, presentación, documento, hoja de
+    cálculo, test, fichas o búsqueda web-, para activarla
+    automáticamente sin botones. Si algo falla o no aplica ninguna, se
+    trata como conversación normal (nunca bloquea el chat). Devuelve
+    {"accion": "imagen"|"presentacion"|"web"|"word"|"excel"|"quiz"|
+    "fichas"|"ninguna", "parametro": "<texto limpio para esa
+    acción>"}.
+
+    'ultimo_generado' es una frase corta y opcional que describe lo
+    último que se generó en la conversación (p. ej. 'un documento
+    Word titulado "Célula procariota"'), para que un mensaje ambiguo
+    como 'hazlo de nuevo' o 'cámbialo' se pueda relacionar con ello en
+    vez de perderse, ya que esta función solo ve el mensaje actual."""
 
     sin_accion = {"accion": "ninguna", "parametro": texto}
 
@@ -3359,6 +3423,40 @@ def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO):
             "Content-Type": "application/json",
         }
 
+        instrucciones = (
+            "Decides qué acción necesita el mensaje del "
+            "usuario, sin responderlo todavía. Si pide una "
+            "imagen, llama a generar_imagen. Si pide una "
+            "presentación o PowerPoint, llama a "
+            "generar_presentacion. Si necesita datos "
+            "actuales de internet, llama a "
+            "buscar_en_internet. Si pide un documento, "
+            "informe o texto en Word para descargar, llama "
+            "a generar_documento_word. Si pide una hoja de "
+            "cálculo, tabla o Excel para descargar, llama "
+            "a generar_documento_excel. Si pide un test, "
+            "examen o preguntas para practicar sobre un "
+            "tema, llama a generar_quiz. Si pide fichas de "
+            "repaso o tarjetas de estudio sobre un tema, "
+            "llama a generar_fichas_estudio. Si es una "
+            "conversación normal (una pregunta general, "
+            "pedir una explicación, un saludo, charlar...), "
+            "NO llames a ninguna herramienta."
+        )
+
+        if ultimo_generado:
+            instrucciones += (
+                "\n\nContexto: lo último que generaste en esta "
+                f"conversación fue {ultimo_generado}. Si el mensaje "
+                "del usuario es ambiguo y parece referirse a eso "
+                "-por ejemplo 'hazlo de nuevo', 'otra vez', "
+                "'cámbialo', 'hazlo más corto', 'ponle otro "
+                "título'-, usa la MISMA herramienta que generó eso, "
+                "y en su parámetro escribe el tema original "
+                "ajustado según lo que pida ahora (no un texto vacío "
+                "ni genérico como 'el documento')."
+            )
+
         payload = {
             "model": MODELO_GROQ,
             "stream": False,
@@ -3367,26 +3465,7 @@ def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO):
             "messages": [
                 {
                     "role": "system",
-                    "content": (
-                        "Decides qué acción necesita el mensaje del "
-                        "usuario, sin responderlo todavía. Si pide una "
-                        "imagen, llama a generar_imagen. Si pide una "
-                        "presentación o PowerPoint, llama a "
-                        "generar_presentacion. Si necesita datos "
-                        "actuales de internet, llama a "
-                        "buscar_en_internet. Si pide un documento, "
-                        "informe o texto en Word para descargar, llama "
-                        "a generar_documento_word. Si pide una hoja de "
-                        "cálculo, tabla o Excel para descargar, llama "
-                        "a generar_documento_excel. Si pide un test, "
-                        "examen o preguntas para practicar sobre un "
-                        "tema, llama a generar_quiz. Si pide fichas de "
-                        "repaso o tarjetas de estudio sobre un tema, "
-                        "llama a generar_fichas_estudio. Si es una "
-                        "conversación normal (una pregunta general, "
-                        "pedir una explicación, un saludo, charlar...), "
-                        "NO llames a ninguna herramienta."
-                    ),
+                    "content": instrucciones,
                 },
                 {"role": "user", "content": texto[:2000]},
             ],
@@ -3713,6 +3792,226 @@ def crear_docx(contenido, ruta):
             documento.add_paragraph(str(punto), style="List Bullet")
 
     documento.save(ruta)
+
+
+# Estilos de párrafo para el PDF del documento (reportlab "platypus":
+# a diferencia del PDF de las presentaciones -diapositivas de tamaño
+# fijo, dibujadas a mano con canvas-, aquí el texto puede ocupar
+# varias páginas, así que usamos los "flowables" de reportlab para que
+# el propio motor se encargue de partir párrafos y saltar de página.
+_PDF_DOCX_ESTILO_TITULO = _PdfEstiloParrafo(
+    name="OriaTitulo",
+    fontName="Helvetica-Bold",
+    fontSize=24,
+    leading=28,
+    textColor=_pdf_color("#1B1B2A"),
+    spaceAfter=6,
+)
+_PDF_DOCX_ESTILO_SUBTITULO = _PdfEstiloParrafo(
+    name="OriaSubtitulo",
+    fontName="Helvetica-Oblique",
+    fontSize=12,
+    leading=16,
+    textColor=_pdf_color("#8A8A96"),
+    spaceAfter=18,
+)
+_PDF_DOCX_ESTILO_ENCABEZADO = _PdfEstiloParrafo(
+    name="OriaEncabezado",
+    fontName="Helvetica-Bold",
+    fontSize=15,
+    leading=19,
+    textColor=_pdf_color("#6C5CE7"),
+    spaceBefore=14,
+    spaceAfter=8,
+)
+_PDF_DOCX_ESTILO_PARRAFO = _PdfEstiloParrafo(
+    name="OriaParrafo",
+    fontName="Helvetica",
+    fontSize=11,
+    leading=16,
+    textColor=_pdf_color("#2B2B31"),
+    alignment=_PDF_JUSTIFICAR,
+    spaceAfter=8,
+)
+_PDF_DOCX_ESTILO_PUNTO = _PdfEstiloParrafo(
+    name="OriaPunto",
+    fontName="Helvetica",
+    fontSize=11,
+    leading=15,
+    textColor=_pdf_color("#2B2B31"),
+)
+
+
+def crear_pdf_docx(contenido, ruta):
+    """Genera el mismo documento que crear_docx pero en PDF (mismo
+    contenido y colores), usando los flowables de reportlab para que
+    el texto se reparta solo en tantas páginas como haga falta."""
+
+    historia = []
+
+    historia.append(
+        _PdfParrafo(html.escape(str(contenido.get("titulo", ""))), _PDF_DOCX_ESTILO_TITULO)
+    )
+
+    subtitulo = contenido.get("subtitulo")
+    if subtitulo:
+        historia.append(
+            _PdfParrafo(html.escape(str(subtitulo)), _PDF_DOCX_ESTILO_SUBTITULO)
+        )
+
+    for seccion in contenido.get("secciones", []) or []:
+        if not isinstance(seccion, dict):
+            continue
+
+        historia.append(
+            _PdfParrafo(
+                html.escape(str(seccion.get("titulo", ""))),
+                _PDF_DOCX_ESTILO_ENCABEZADO,
+            )
+        )
+
+        for parrafo_texto in seccion.get("parrafos", []) or []:
+            historia.append(
+                _PdfParrafo(html.escape(str(parrafo_texto)), _PDF_DOCX_ESTILO_PARRAFO)
+            )
+
+        puntos = seccion.get("puntos", []) or []
+        if puntos:
+            historia.append(
+                _PdfListaFlotante(
+                    [
+                        _PdfElementoLista(
+                            _PdfParrafo(html.escape(str(p)), _PDF_DOCX_ESTILO_PUNTO)
+                        )
+                        for p in puntos
+                    ],
+                    bulletType="bullet",
+                    leftIndent=18,
+                    spaceAfter=8,
+                )
+            )
+
+    documento_pdf = _PdfDocumento(
+        ruta,
+        pagesize=_PDF_A4,
+        leftMargin=1 * _PDF_INCH,
+        rightMargin=1 * _PDF_INCH,
+        topMargin=1 * _PDF_INCH,
+        bottomMargin=1 * _PDF_INCH,
+    )
+    documento_pdf.build(historia)
+
+
+def generar_html_documento(contenido):
+    """Genera una vista previa HTML de una sola página (como una hoja
+    de papel) para que el usuario vea qué pone el documento antes de
+    descargarlo, igual que ya se hace con las presentaciones. A
+    diferencia de las diapositivas, un documento no tiene páginas
+    fijas -el texto fluye-, así que se muestra como una página larga
+    desplazable en vez de una secuencia de diapositivas con botones."""
+
+    titulo = html.escape(str(contenido.get("titulo", "")))
+    subtitulo = contenido.get("subtitulo")
+
+    bloques_html = []
+
+    if subtitulo:
+        bloques_html.append(
+            f'<p class="oria-doc-subtitulo">{html.escape(str(subtitulo))}</p>'
+        )
+
+    for seccion in contenido.get("secciones", []) or []:
+        if not isinstance(seccion, dict):
+            continue
+
+        bloques_html.append(
+            f'<h2 class="oria-doc-encabezado">'
+            f'{html.escape(str(seccion.get("titulo", "")))}</h2>'
+        )
+
+        for parrafo_texto in seccion.get("parrafos", []) or []:
+            bloques_html.append(
+                f'<p class="oria-doc-parrafo">'
+                f'{html.escape(str(parrafo_texto))}</p>'
+            )
+
+        puntos = seccion.get("puntos", []) or []
+        if puntos:
+            items = "".join(
+                f'<li>{html.escape(str(p))}</li>' for p in puntos
+            )
+            bloques_html.append(f'<ul class="oria-doc-puntos">{items}</ul>')
+
+    contenido_html = "".join(bloques_html)
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0;
+    padding: 24px 12px;
+    background: #E9E9F0;
+    font-family: 'Calibri', 'Segoe UI', Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+  }}
+  .oria-doc-pagina {{
+    background: #FFFFFF;
+    max-width: 720px;
+    width: 100%;
+    padding: 56px 64px;
+    border-radius: 6px;
+    box-shadow: 0 2px 18px rgba(27, 27, 42, 0.12);
+  }}
+  .oria-doc-titulo {{
+    margin: 0 0 6px 0;
+    font-size: 30px;
+    font-weight: 700;
+    color: #1B1B2A;
+    border-bottom: 2px solid #6C5CE7;
+    padding-bottom: 14px;
+  }}
+  .oria-doc-subtitulo {{
+    margin: 10px 0 26px 0;
+    font-size: 15px;
+    font-style: italic;
+    color: #8A8A96;
+  }}
+  .oria-doc-encabezado {{
+    margin: 26px 0 10px 0;
+    font-size: 19px;
+    font-weight: 700;
+    color: #6C5CE7;
+  }}
+  .oria-doc-parrafo {{
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #2B2B31;
+    text-align: justify;
+  }}
+  .oria-doc-puntos {{
+    margin: 0 0 14px 0;
+    padding-left: 22px;
+  }}
+  .oria-doc-puntos li {{
+    font-size: 14px;
+    line-height: 1.6;
+    color: #2B2B31;
+    margin-bottom: 4px;
+  }}
+</style>
+</head>
+<body>
+  <div class="oria-doc-pagina">
+    <h1 class="oria-doc-titulo">{titulo}</h1>
+    {contenido_html}
+  </div>
+</body>
+</html>"""
 
 
 def generar_contenido_hoja_calculo(tema, idioma=IDIOMA_POR_DEFECTO):
@@ -4303,7 +4602,20 @@ def obtener_respuesta_ia_stream(
         "saberlo' o 'depende de muchos factores' para evitar "
         "responder: puedes reconocer brevemente la incertidumbre, "
         "pero siempre tienes que terminar comprometiéndote con una "
-        "respuesta concreta (un nombre, una opción, un favorito)."
+        "respuesta concreta (un nombre, una opción, un favorito). "
+        "Generar presentaciones, documentos Word, hojas de cálculo "
+        "Excel, tests y fichas de repaso NO es algo que tú redactes "
+        "aquí como texto: lo hace automáticamente otra parte del "
+        "sistema, y el usuario ya ve un botón de descarga cuando "
+        "ocurre. Si en el historial ves que ya generaste algo así, "
+        "o si el usuario te pide 'hazlo de nuevo', 'otra vez' o "
+        "'cámbialo' refiriéndose a ello, NUNCA te inventes ni "
+        "escribas tú mismo una ruta de archivo, un enlace de "
+        "descarga ni un texto entre corchetes simulando un archivo: "
+        "eso sería un archivo falso que no existe. Si no tienes "
+        "manera de volver a generarlo desde aquí, simplemente dile "
+        "con naturalidad qué necesitas que te repita o aclare para "
+        "poder hacerlo de nuevo."
     )
 
     if contexto_web:
@@ -4390,9 +4702,20 @@ def obtener_respuesta_ia_stream(
                 if "role" not in msg or "content" not in msg:
                     continue
 
-                # Los mensajes de tipo "imagen" (generadas por ORIA)
-                # no se pueden mandar como texto; los resumimos.
-                if msg.get("type") == "image":
+                # Los mensajes que no son texto plano (imágenes,
+                # presentaciones, documentos, hojas de cálculo, tests
+                # y fichas) no se pueden mandar tal cual: su "content"
+                # es una ruta de archivo en disco o, en el caso de
+                # quiz/fichas, un diccionario entero con todo el
+                # contenido. Si se mandara así de crudo, la IA lo
+                # vería como texto normal en el historial y podría
+                # "imitarlo" en una respuesta futura -por ejemplo,
+                # inventándose una ruta de archivo que parece real
+                # pero no lo es-, así que aquí los resumimos siempre
+                # en una frase corta y legible.
+                tipo_mensaje = msg.get("type")
+
+                if tipo_mensaje == "image":
                     if msg["role"] == "assistant":
                         mensajes_preparados.append(
                             {
@@ -4400,6 +4723,90 @@ def obtener_respuesta_ia_stream(
                                 "content": (
                                     "[Generé una imagen a partir de: "
                                     f"{msg.get('prompt', '')}]"
+                                ),
+                            }
+                        )
+                    continue
+
+                if tipo_mensaje == "pptx":
+                    if msg["role"] == "assistant":
+                        mensajes_preparados.append(
+                            {
+                                "role": "assistant",
+                                "content": (
+                                    "[Generé una presentación titulada "
+                                    f"\"{msg.get('titulo', '')}\" con "
+                                    f"{msg.get('n_diapositivas', 0)} "
+                                    "diapositivas, que el usuario ya "
+                                    "puede descargar.]"
+                                ),
+                            }
+                        )
+                    continue
+
+                if tipo_mensaje == "docx":
+                    if msg["role"] == "assistant":
+                        mensajes_preparados.append(
+                            {
+                                "role": "assistant",
+                                "content": (
+                                    "[Generé un documento Word titulado "
+                                    f"\"{msg.get('titulo', '')}\", que el "
+                                    "usuario ya puede descargar.]"
+                                ),
+                            }
+                        )
+                    continue
+
+                if tipo_mensaje == "xlsx":
+                    if msg["role"] == "assistant":
+                        mensajes_preparados.append(
+                            {
+                                "role": "assistant",
+                                "content": (
+                                    "[Generé una hoja de cálculo Excel "
+                                    f"titulada \"{msg.get('titulo', '')}\", "
+                                    "que el usuario ya puede descargar.]"
+                                ),
+                            }
+                        )
+                    continue
+
+                if tipo_mensaje == "quiz":
+                    if msg["role"] == "assistant":
+                        datos_quiz = msg.get("content")
+                        datos_quiz = datos_quiz if isinstance(datos_quiz, dict) else {}
+                        mensajes_preparados.append(
+                            {
+                                "role": "assistant",
+                                "content": (
+                                    "[Generé un test titulado "
+                                    f"\"{datos_quiz.get('titulo', '')}\" "
+                                    "con "
+                                    f"{len(datos_quiz.get('preguntas', []))} "
+                                    "preguntas, que el usuario ya está "
+                                    "viendo.]"
+                                ),
+                            }
+                        )
+                    continue
+
+                if tipo_mensaje == "fichas":
+                    if msg["role"] == "assistant":
+                        datos_fichas = msg.get("content")
+                        datos_fichas = (
+                            datos_fichas if isinstance(datos_fichas, dict) else {}
+                        )
+                        mensajes_preparados.append(
+                            {
+                                "role": "assistant",
+                                "content": (
+                                    "[Generé fichas de repaso tituladas "
+                                    f"\"{datos_fichas.get('titulo', '')}\" "
+                                    "con "
+                                    f"{len(datos_fichas.get('fichas', []))} "
+                                    "fichas, que el usuario ya está "
+                                    "viendo.]"
                                 ),
                             }
                         )
@@ -4859,6 +5266,24 @@ protagonismo a la lista. */
 }
 
 .st-key-lista_chats .stButton > button:hover {
+    color: #C0392B !important;
+    background-color: #F6E9E7 !important;
+}
+
+/* Más específico que la regla anterior (no depende de que el botón
+esté dentro de "lista_chats"): nos aseguramos de que la "✕" de borrar
+se vea siempre pequeña, discreta y centrada, sin afectar al botón de
+seleccionar la conversación que tiene al lado. */
+[class*="st-key-del_"] button {
+    padding: 0.3rem !important;
+    min-height: 0 !important;
+    color: #B5B5AF !important;
+    font-size: 0.85rem !important;
+    text-align: center !important;
+    justify-content: center !important;
+}
+
+[class*="st-key-del_"] button:hover {
     color: #C0392B !important;
     background-color: #F6E9E7 !important;
 }
@@ -5655,7 +6080,11 @@ with st.sidebar:
 
             with col_del:
 
-                if st.button("", key=f"del_{cid}"):
+                if st.button(
+                    "✕",
+                    key=f"del_{cid}",
+                    help=t("eliminar_conversacion_tooltip"),
+                ):
                     chats_a_borrar.append(cid)
 
     if chats_a_borrar:
@@ -5952,21 +6381,48 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
 
             if os.path.exists(content):
                 titulo_docx = message.get("titulo", t("documento_sin_titulo"))
+                ruta_pdf_docx = message.get("ruta_pdf")
+                ruta_html_docx = message.get("ruta_html")
 
                 st.markdown(t("documento_generado", titulo=titulo_docx))
 
-                with open(content, "rb") as f:
-                    st.download_button(
-                        t("descargar_documento_word"),
-                        data=f.read(),
-                        file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
-                        mime=(
-                            "application/vnd.openxmlformats-officedocument"
-                            ".wordprocessingml.document"
-                        ),
-                        use_container_width=True,
-                        key=f"descargar_docx_{indice_mensaje}",
-                    )
+                if ruta_html_docx and os.path.exists(ruta_html_docx):
+                    with open(ruta_html_docx, "r", encoding="utf-8") as f:
+                        components.html(f.read(), height=600, scrolling=True)
+
+                hay_pdf_docx = bool(ruta_pdf_docx) and os.path.exists(ruta_pdf_docx)
+
+                def _boton_docx():
+                    with open(content, "rb") as f:
+                        st.download_button(
+                            t("descargar_documento_word"),
+                            data=f.read(),
+                            file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
+                            mime=(
+                                "application/vnd.openxmlformats-officedocument"
+                                ".wordprocessingml.document"
+                            ),
+                            use_container_width=True,
+                            key=f"descargar_docx_{indice_mensaje}",
+                        )
+
+                if hay_pdf_docx:
+                    st.caption(t("exportar_como"))
+                    col_word, col_pdf_docx = st.columns(2)
+                    with col_word:
+                        _boton_docx()
+                    with col_pdf_docx:
+                        with open(ruta_pdf_docx, "rb") as f:
+                            st.download_button(
+                                t("descargar_pdf"),
+                                data=f.read(),
+                                file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.pdf",
+                                mime="application/pdf",
+                                use_container_width=True,
+                                key=f"descargar_pdf_docx_{indice_mensaje}",
+                            )
+                else:
+                    _boton_docx()
             else:
                 st.markdown(t("docx_no_disponible"))
 
@@ -6054,7 +6510,11 @@ if entrada:
     # Si ya hay un archivo adjunto (PDF o imagen para analizar), ese
     # siempre manda: no tiene sentido "adivinar" otra acción distinta.
     if user_text and not archivo_adjunto:
-        intencion = detectar_intencion(user_text, idioma=st.session_state.idioma)
+        intencion = detectar_intencion(
+            user_text,
+            idioma=st.session_state.idioma,
+            ultimo_generado=_describir_ultimo_generado(mensajes_actuales),
+        )
 
     modo_imagen_auto = intencion["accion"] == "imagen"
     modo_presentacion_auto = intencion["accion"] == "presentacion"
@@ -6361,28 +6821,65 @@ if entrada:
                         ),
                     }
                 else:
+                    with st.spinner(t("creando_exportables")):
+                        ruta_pdf_docx = os.path.join(
+                            CARPETA_DOCUMENTOS_WORD, f"{uuid.uuid4()}.pdf"
+                        )
+                        ruta_html_docx = os.path.join(
+                            CARPETA_DOCUMENTOS_WORD, f"{uuid.uuid4()}.html"
+                        )
+                        try:
+                            crear_pdf_docx(contenido_docx, ruta_pdf_docx)
+                        except Exception:
+                            ruta_pdf_docx = None
+                        try:
+                            html_preview_docx = generar_html_documento(contenido_docx)
+                            with open(ruta_html_docx, "w", encoding="utf-8") as f:
+                                f.write(html_preview_docx)
+                        except Exception:
+                            ruta_html_docx = None
+
                     titulo_docx = contenido_docx.get(
                         "titulo", t("documento_sin_titulo")
                     )
 
                     st.markdown(t("documento_generado", titulo=titulo_docx))
 
-                    with open(ruta_docx, "rb") as f:
-                        st.download_button(
-                            t("descargar_documento_word"),
-                            data=f.read(),
-                            file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
-                            mime=(
-                                "application/vnd.openxmlformats-officedocument"
-                                ".wordprocessingml.document"
-                            ),
-                            use_container_width=True,
-                        )
+                    if ruta_html_docx and os.path.exists(ruta_html_docx):
+                        with open(ruta_html_docx, "r", encoding="utf-8") as f:
+                            components.html(f.read(), height=600, scrolling=True)
+
+                    st.caption(t("exportar_como"))
+                    col_word, col_pdf_docx = st.columns(2)
+                    with col_word:
+                        with open(ruta_docx, "rb") as f:
+                            st.download_button(
+                                t("descargar_documento_word"),
+                                data=f.read(),
+                                file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.docx",
+                                mime=(
+                                    "application/vnd.openxmlformats-officedocument"
+                                    ".wordprocessingml.document"
+                                ),
+                                use_container_width=True,
+                            )
+                    if ruta_pdf_docx and os.path.exists(ruta_pdf_docx):
+                        with col_pdf_docx:
+                            with open(ruta_pdf_docx, "rb") as f:
+                                st.download_button(
+                                    t("descargar_pdf"),
+                                    data=f.read(),
+                                    file_name=f"{_nombre_archivo_seguro(titulo_docx, 'documento')}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True,
+                                )
 
                     respuesta_final = {
                         "role": "assistant",
                         "type": "docx",
                         "content": ruta_docx,
+                        "ruta_pdf": ruta_pdf_docx,
+                        "ruta_html": ruta_html_docx,
                         "prompt": user_text,
                         "titulo": titulo_docx,
                     }
