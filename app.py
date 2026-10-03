@@ -1,6 +1,7 @@
 import json
 import os
 import io
+import time
 import uuid
 import html
 import base64
@@ -78,6 +79,62 @@ TABLA_SUPABASE = "oria_usuarios"
 # Evita que las conversaciones muy largas se coman el contexto
 # (y la cuota gratuita) del modelo.
 MAX_MENSAJES_HISTORIAL = 20
+
+# Las imágenes, presentaciones, documentos Word y hojas Excel que se
+# generan se guardan como archivos en el servidor para poder
+# descargarlos. Sin un límite, estas carpetas crecerían sin parar
+# mientras la app siga encendida. Las horas que se conserva cada
+# archivo antes de poder borrarse automáticamente:
+_HORAS_CONSERVAR_ARCHIVOS_GENERADOS = 24
+
+
+def _limpiar_carpeta_antigua(carpeta, horas=_HORAS_CONSERVAR_ARCHIVOS_GENERADOS):
+    """Borra de 'carpeta' los archivos con más de 'horas' de
+    antigüedad. Nunca lanza una excepción: si algo va mal (la carpeta
+    no existe todavía, no hay permisos...) simplemente no borra nada,
+    para no romper la app por un detalle de limpieza."""
+
+    try:
+        if not os.path.isdir(carpeta):
+            return
+
+        limite = time.time() - horas * 3600
+
+        for nombre in os.listdir(carpeta):
+            ruta = os.path.join(carpeta, nombre)
+            try:
+                if os.path.isfile(ruta) and os.path.getmtime(ruta) < limite:
+                    os.remove(ruta)
+            except OSError:
+                continue
+
+    except Exception:
+        pass
+
+
+@st.cache_resource(ttl=3600)
+def _limpiar_archivos_generados_antiguos():
+    """Limpia de archivos viejos las carpetas de imágenes,
+    presentaciones, documentos Word y hojas Excel generadas, para que
+    no crezcan sin límite mientras la app sigue encendida.
+
+    Gracias a @st.cache_resource(ttl=3600), el cuerpo de esta función
+    solo se ejecuta de verdad como mucho una vez por hora (compartido
+    entre todas las personas que estén usando la app a la vez), en
+    vez de en cada recarga de la página."""
+
+    for carpeta in (
+        CARPETA_IMAGENES,
+        CARPETA_PRESENTACIONES,
+        CARPETA_DOCUMENTOS_WORD,
+        CARPETA_HOJAS_EXCEL,
+    ):
+        _limpiar_carpeta_antigua(carpeta)
+
+    return True
+
+
+_limpiar_archivos_generados_antiguos()
 
 
 def login_configurado():
@@ -624,6 +681,23 @@ TEXTOS = {
             "se ha alcanzado el límite gratuito de peticiones de "
             "Groq por ahora; espera un minuto y vuelve a intentarlo"
         ),
+        "error_generar_contenido": (
+            "Groq ha tenido un problema al generar el contenido. "
+            "Prueba a intentarlo de nuevo en unos segundos."
+        ),
+        "error_generar_contenido_tardanza": (
+            "Generar el contenido ha tardado demasiado. Prueba a "
+            "intentarlo de nuevo."
+        ),
+        "error_generar_contenido_inesperado": (
+            "Ha ocurrido un problema inesperado al generar el "
+            "contenido. Prueba a intentarlo de nuevo."
+        ),
+        "aviso_varias_peticiones": (
+            "Parece que has pedido varias cosas a la vez. De momento "
+            "solo puedo hacer una por mensaje, así que me centro en "
+            "la primera:"
+        ),
         "invitado": "Invitado",
     },
     "en": {
@@ -757,6 +831,22 @@ TEXTOS = {
         "error_429_breve": (
             "Groq's free request limit has been reached for now; "
             "wait a minute and try again"
+        ),
+        "error_generar_contenido": (
+            "Groq had a problem generating the content. Try again "
+            "in a few seconds."
+        ),
+        "error_generar_contenido_tardanza": (
+            "Generating the content took too long. Try again."
+        ),
+        "error_generar_contenido_inesperado": (
+            "Something unexpected went wrong while generating the "
+            "content. Try again."
+        ),
+        "aviso_varias_peticiones": (
+            "Looks like you asked for more than one thing at once. "
+            "I can only do one per message for now, so I'll focus "
+            "on the first:"
         ),
         "invitado": "Guest",
     },
@@ -895,6 +985,22 @@ TEXTOS = {
             "s'ha arribat al límit gratuït de peticions de Groq "
             "per ara; espera un minut i torna-ho a provar"
         ),
+        "error_generar_contenido": (
+            "Groq ha tingut un problema generant el contingut. "
+            "Prova-ho de nou d'aquí uns segons."
+        ),
+        "error_generar_contenido_tardanza": (
+            "Generar el contingut ha trigat massa. Prova-ho de nou."
+        ),
+        "error_generar_contenido_inesperado": (
+            "S'ha produït un problema inesperat generant el "
+            "contingut. Prova-ho de nou."
+        ),
+        "aviso_varias_peticiones": (
+            "Sembla que has demanat diverses coses alhora. De "
+            "moment només puc fer-ne una per missatge, així que em "
+            "centro en la primera:"
+        ),
         "invitado": "Convidat",
     },
     "fr": {
@@ -1032,6 +1138,23 @@ TEXTOS = {
         "error_429_breve": (
             "la limite gratuite de requêtes de Groq a été atteinte "
             "pour l'instant ; attends une minute et réessaie"
+        ),
+        "error_generar_contenido": (
+            "Groq a rencontré un problème en générant le contenu. "
+            "Réessaie dans quelques secondes."
+        ),
+        "error_generar_contenido_tardanza": (
+            "La génération du contenu a pris trop de temps. "
+            "Réessaie."
+        ),
+        "error_generar_contenido_inesperado": (
+            "Un problème inattendu est survenu en générant le "
+            "contenu. Réessaie."
+        ),
+        "aviso_varias_peticiones": (
+            "On dirait que tu as demandé plusieurs choses à la "
+            "fois. Pour l'instant je ne peux en faire qu'une par "
+            "message, donc je me concentre sur la première :"
         ),
         "invitado": "Invité",
     },
@@ -1653,10 +1776,7 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
         if respuesta.status_code != 200:
             if respuesta.status_code == 429:
                 return None, t("error_429_breve", idioma=idioma)
-            return None, (
-                f"Groq ha devuelto el error {respuesta.status_code} al "
-                "generar el contenido."
-            )
+            return None, t("error_generar_contenido", idioma=idioma)
 
         texto = (
             respuesta.json()
@@ -1696,10 +1816,13 @@ def generar_contenido_presentacion(tema, idioma=IDIOMA_POR_DEFECTO):
         return contenido, None
 
     except requests.exceptions.Timeout:
-        return None, "Generar el contenido ha tardado demasiado."
+        return None, t("error_generar_contenido_tardanza", idioma=idioma)
 
-    except Exception as e:
-        return None, str(e)
+    except requests.exceptions.RequestException:
+        return None, t("error_generar_contenido", idioma=idioma)
+
+    except Exception:
+        return None, t("error_generar_contenido_inesperado", idioma=idioma)
 
 
 def _nombre_archivo_seguro(texto, por_defecto="presentacion"):
@@ -3086,6 +3209,16 @@ PATRON_ACTUALIDAD = re.compile(
     re.IGNORECASE,
 )
 
+# Patrón aparte (sin IGNORECASE a propósito): preguntas tipo "qué es
+# el IRAV" o "qué significa la LOE", donde la sigla va en mayúsculas.
+# Son términos muy concretos y fáciles de confundir con otros
+# parecidos -por eso conviene comprobarlos en vez de fiarse de la
+# memoria-, así que si el router de intención no los detecta como
+# búsqueda, este patrón los pilla igualmente.
+PATRON_SIGLA = re.compile(
+    r"(?i:qu[eé] (es|significa) (el|la|los|las)?)\s*[A-ZÁÉÍÓÚÑ]{2,6}\b"
+)
+
 
 def obtener_tavily_key():
     """API key gratuita de Tavily (tavily.com) para buscar en la web."""
@@ -3109,8 +3242,13 @@ def obtener_tavily_key():
 
 
 def necesita_busqueda(texto):
-    """True si el mensaje parece depender de información actual."""
-    return bool(PATRON_ACTUALIDAD.search(texto or ""))
+    """True si el mensaje parece depender de información actual, o
+    de una sigla/término concreto que convenga comprobar en vez de
+    confiar en la memoria del modelo."""
+    texto = texto or ""
+    return bool(PATRON_ACTUALIDAD.search(texto)) or bool(
+        PATRON_SIGLA.search(texto)
+    )
 
 
 def buscar_en_web(consulta):
@@ -3280,7 +3418,15 @@ _HERRAMIENTAS_INTENCION = [
                 "'qué equipo está mejor esta temporada'): para opinar "
                 "bien sobre eso primero hace falta saber cómo están "
                 "rindiendo ahora mismo, así que también hay que "
-                "buscarlo."
+                "buscarlo. Úsala también cuando pregunten qué es, "
+                "qué significa o en qué consiste una sigla, un "
+                "índice, una ley, una normativa, un impuesto o un "
+                "organismo concreto y específico (ej. 'qué es el "
+                "IRAV', 'qué es el IPC', 'qué es la plusvalía "
+                "municipal'): son términos fáciles de confundir con "
+                "otros parecidos, así que es mejor comprobarlo que "
+                "arriesgarse a dar una definición incorrecta de "
+                "memoria."
             ),
             "parameters": {
                 "type": "object",
@@ -3448,9 +3594,14 @@ def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO, ultimo_generado=None):
     último que se generó en la conversación (p. ej. 'un documento
     Word titulado "Célula procariota"'), para que un mensaje ambiguo
     como 'hazlo de nuevo' o 'cámbialo' se pueda relacionar con ello en
-    vez de perderse, ya que esta función solo ve el mensaje actual."""
+    vez de perderse, ya que esta función solo ve el mensaje actual.
 
-    sin_accion = {"accion": "ninguna", "parametro": texto}
+    El resultado incluye también "multiple": True cuando el mensaje
+    parecía pedir más de una cosa generable a la vez (solo se ejecuta
+    la primera), para poder avisar de ello en vez de ignorar la
+    segunda petición en silencio."""
+
+    sin_accion = {"accion": "ninguna", "parametro": texto, "multiple": False}
 
     api_key = obtener_api_key()
     if not api_key or not api_key.startswith("gsk_"):
@@ -3533,43 +3684,53 @@ def detectar_intencion(texto, idioma=IDIOMA_POR_DEFECTO, ultimo_generado=None):
         except json.JSONDecodeError:
             argumentos = {}
 
+        # Si el modelo ha pedido más de una herramienta a la vez (p.
+        # ej. el usuario escribió "hazme un resumen en Word y también
+        # un test sobre el tema"), solo podemos ejecutar una. Lo
+        # marcamos para poder avisar al usuario de que solo se ha
+        # hecho la primera, en vez de ignorar la segunda en silencio.
+        hay_mas_de_una_peticion = len(llamadas) > 1
+
         if nombre == "generar_imagen":
-            return {
+            resultado = {
                 "accion": "imagen",
                 "parametro": argumentos.get("descripcion") or texto,
             }
-        if nombre == "generar_presentacion":
-            return {
+        elif nombre == "generar_presentacion":
+            resultado = {
                 "accion": "presentacion",
                 "parametro": argumentos.get("tema") or texto,
             }
-        if nombre == "buscar_en_internet":
-            return {
+        elif nombre == "buscar_en_internet":
+            resultado = {
                 "accion": "web",
                 "parametro": argumentos.get("consulta") or texto,
             }
-        if nombre == "generar_documento_word":
-            return {
+        elif nombre == "generar_documento_word":
+            resultado = {
                 "accion": "word",
                 "parametro": argumentos.get("tema") or texto,
             }
-        if nombre == "generar_documento_excel":
-            return {
+        elif nombre == "generar_documento_excel":
+            resultado = {
                 "accion": "excel",
                 "parametro": argumentos.get("tema") or texto,
             }
-        if nombre == "generar_quiz":
-            return {
+        elif nombre == "generar_quiz":
+            resultado = {
                 "accion": "quiz",
                 "parametro": argumentos.get("tema") or texto,
             }
-        if nombre == "generar_fichas_estudio":
-            return {
+        elif nombre == "generar_fichas_estudio":
+            resultado = {
                 "accion": "fichas",
                 "parametro": argumentos.get("tema") or texto,
             }
+        else:
+            return sin_accion
 
-        return sin_accion
+        resultado["multiple"] = hay_mas_de_una_peticion
+        return resultado
 
     except Exception:
         return sin_accion
@@ -3744,10 +3905,7 @@ def generar_contenido_documento_word(tema, idioma=IDIOMA_POR_DEFECTO):
         if respuesta.status_code != 200:
             if respuesta.status_code == 429:
                 return None, t("error_429_breve", idioma=idioma)
-            return None, (
-                f"Groq ha devuelto el error {respuesta.status_code} al "
-                "generar el contenido."
-            )
+            return None, t("error_generar_contenido", idioma=idioma)
 
         texto = (
             respuesta.json()
@@ -3779,10 +3937,13 @@ def generar_contenido_documento_word(tema, idioma=IDIOMA_POR_DEFECTO):
         return contenido, None
 
     except requests.exceptions.Timeout:
-        return None, "Generar el contenido ha tardado demasiado."
+        return None, t("error_generar_contenido_tardanza", idioma=idioma)
 
-    except Exception as e:
-        return None, str(e)
+    except requests.exceptions.RequestException:
+        return None, t("error_generar_contenido", idioma=idioma)
+
+    except Exception:
+        return None, t("error_generar_contenido_inesperado", idioma=idioma)
 
 
 def crear_docx(contenido, ruta):
@@ -4131,10 +4292,7 @@ def generar_contenido_hoja_calculo(tema, idioma=IDIOMA_POR_DEFECTO):
         if respuesta.status_code != 200:
             if respuesta.status_code == 429:
                 return None, t("error_429_breve", idioma=idioma)
-            return None, (
-                f"Groq ha devuelto el error {respuesta.status_code} al "
-                "generar el contenido."
-            )
+            return None, t("error_generar_contenido", idioma=idioma)
 
         texto = (
             respuesta.json()
@@ -4171,10 +4329,13 @@ def generar_contenido_hoja_calculo(tema, idioma=IDIOMA_POR_DEFECTO):
         return contenido, None
 
     except requests.exceptions.Timeout:
-        return None, "Generar el contenido ha tardado demasiado."
+        return None, t("error_generar_contenido_tardanza", idioma=idioma)
 
-    except Exception as e:
-        return None, str(e)
+    except requests.exceptions.RequestException:
+        return None, t("error_generar_contenido", idioma=idioma)
+
+    except Exception:
+        return None, t("error_generar_contenido_inesperado", idioma=idioma)
 
 
 def crear_xlsx(contenido, ruta):
@@ -4331,10 +4492,7 @@ def generar_contenido_quiz(tema, idioma=IDIOMA_POR_DEFECTO):
         if respuesta.status_code != 200:
             if respuesta.status_code == 429:
                 return None, t("error_429_breve", idioma=idioma)
-            return None, (
-                f"Groq ha devuelto el error {respuesta.status_code} al "
-                "generar el contenido."
-            )
+            return None, t("error_generar_contenido", idioma=idioma)
 
         texto = (
             respuesta.json()
@@ -4371,10 +4529,13 @@ def generar_contenido_quiz(tema, idioma=IDIOMA_POR_DEFECTO):
         return contenido, None
 
     except requests.exceptions.Timeout:
-        return None, "Generar el contenido ha tardado demasiado."
+        return None, t("error_generar_contenido_tardanza", idioma=idioma)
 
-    except Exception as e:
-        return None, str(e)
+    except requests.exceptions.RequestException:
+        return None, t("error_generar_contenido", idioma=idioma)
+
+    except Exception:
+        return None, t("error_generar_contenido_inesperado", idioma=idioma)
 
 
 def generar_contenido_fichas(tema, idioma=IDIOMA_POR_DEFECTO):
@@ -4441,10 +4602,7 @@ def generar_contenido_fichas(tema, idioma=IDIOMA_POR_DEFECTO):
         if respuesta.status_code != 200:
             if respuesta.status_code == 429:
                 return None, t("error_429_breve", idioma=idioma)
-            return None, (
-                f"Groq ha devuelto el error {respuesta.status_code} al "
-                "generar el contenido."
-            )
+            return None, t("error_generar_contenido", idioma=idioma)
 
         texto = (
             respuesta.json()
@@ -4481,10 +4639,13 @@ def generar_contenido_fichas(tema, idioma=IDIOMA_POR_DEFECTO):
         return contenido, None
 
     except requests.exceptions.Timeout:
-        return None, "Generar el contenido ha tardado demasiado."
+        return None, t("error_generar_contenido_tardanza", idioma=idioma)
 
-    except Exception as e:
-        return None, str(e)
+    except requests.exceptions.RequestException:
+        return None, t("error_generar_contenido", idioma=idioma)
+
+    except Exception:
+        return None, t("error_generar_contenido_inesperado", idioma=idioma)
 
 
 def _mostrar_quiz(quiz, key_prefix):
@@ -4642,9 +4803,26 @@ def obtener_respuesta_ia_stream(
         "expresamente que le respondas en otro idioma distinto (en "
         "ese caso, sigue esa petición solo para esa respuesta). "
         "Explica las cosas de forma clara y útil. "
+        "Ajusta SIEMPRE la longitud de tu respuesta a lo que pida "
+        "el usuario: si pide algo breve, corto, resumido, rápido o "
+        "'sin rollos', contesta en pocas frases, directo a lo que "
+        "importa, sin añadir información que no se ha pedido ni "
+        "rellenar con contexto de más. Si no dice nada sobre la "
+        "longitud, da una respuesta completa pero sin alargarte "
+        "innecesariamente: solo extiéndete de verdad cuando el tema "
+        "sea complejo y lo necesite para explicarse bien. "
         "Nunca inventes marcadores, resultados, noticias, horarios "
         "ni precios: solo puedes darlos si aparecen en los "
         "resultados de búsqueda web que se te proporcionan. "
+        "Cuando te pregunten por un dato concreto y específico (una "
+        "sigla, un índice, una ley, una normativa, una cifra "
+        "oficial, el nombre exacto de una institución...) del que "
+        "no estés completamente seguro, no te inventes una "
+        "respuesta que suene plausible pero pueda ser incorrecta: "
+        "esos términos son fáciles de confundir con otros parecidos, "
+        "así que si tienes resultados de búsqueda web úsalos, y si "
+        "no los tienes, dilo con honestidad en vez de arriesgarte a "
+        "dar un dato erróneo con total seguridad. "
         "Cuando el usuario te pida tu opinión, tu predicción o qué "
         "crees sobre algo (quién ganará algo, qué equipo o jugador "
         "está mejor, qué opción es mejor, etc.), tienes que mojarte: "
@@ -6686,6 +6864,13 @@ if entrada:
     respuesta_final = None
 
     with st.chat_message("assistant"):
+
+        # Si el mensaje parecía pedir más de una cosa generable a la
+        # vez (p. ej. "hazme un resumen en Word y también un test"),
+        # avisamos de que solo se puede hacer una por mensaje, en vez
+        # de cumplir solo la primera sin decir nada.
+        if intencion.get("multiple"):
+            st.caption(t("aviso_varias_peticiones", idioma=st.session_state.idioma))
 
         # ----------------------------------------------------
         # MODO: GENERAR IMAGEN
