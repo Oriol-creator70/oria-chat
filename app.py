@@ -605,6 +605,14 @@ TEXTOS = {
             "a veces algún error puntual bajo mucha demanda — es el "
             "límite normal de una herramienta 100% gratuita."
         ),
+        "estado_calidad_imagen_cloudflare": (
+            "ORIA mejora automáticamente tu descripción antes de "
+            "generar una imagen, y usa Cloudflare Workers AI (modelo "
+            "Flux) como generador principal, bastante más realista y "
+            "estable. Si alguna vez se agotara su cuota gratuita "
+            "diaria, ORIA pasa sola a Pollinations.ai como respaldo "
+            "para que nunca te quedes sin poder generar una imagen."
+        ),
         "chat_placeholder": "Pregunta a ORIA, o adjunta una imagen/PDF...",
         "boton_escuchar": "Escuchar",
         "boton_copiar": "Copiar",
@@ -758,6 +766,15 @@ TEXTOS = {
             "occasionally an error under heavy demand — the normal "
             "limit of a 100% free tool."
         ),
+        "estado_calidad_imagen_cloudflare": (
+            "ORIA automatically improves your description before "
+            "generating an image, and uses Cloudflare Workers AI "
+            "(Flux model) as its main generator, quite a bit more "
+            "realistic and stable. If its free daily quota ever runs "
+            "out, ORIA automatically switches to Pollinations.ai as "
+            "a backup so you're never left without being able to "
+            "generate an image."
+        ),
         "chat_placeholder": "Ask ORIA, or attach an image/PDF...",
         "boton_escuchar": "Listen",
         "boton_copiar": "Copy",
@@ -909,6 +926,15 @@ TEXTOS = {
             "pagament, però per això inclou una petita marca d'aigua "
             "i de vegades algun error puntual sota molta demanda — "
             "és el límit normal d'una eina 100% gratuïta."
+        ),
+        "estado_calidad_imagen_cloudflare": (
+            "ORIA millora automàticament la teva descripció abans de "
+            "generar una imatge, i utilitza Cloudflare Workers AI "
+            "(model Flux) com a generador principal, bastant més "
+            "realista i estable. Si mai s'esgotés la seva quota "
+            "gratuïta diària, ORIA passa sola a Pollinations.ai com "
+            "a reserva perquè mai et quedis sense poder generar una "
+            "imatge."
         ),
         "chat_placeholder": "Pregunta a l'ORIA, o adjunta una imatge/PDF...",
         "boton_escuchar": "Escoltar",
@@ -1063,6 +1089,15 @@ TEXTOS = {
             "mais c'est aussi pour ça qu'il inclut un petit filigrane "
             "et parfois une erreur ponctuelle en cas de forte "
             "demande — la limite normale d'un outil 100% gratuit."
+        ),
+        "estado_calidad_imagen_cloudflare": (
+            "ORIA améliore automatiquement ta description avant de "
+            "générer une image, et utilise Cloudflare Workers AI "
+            "(modèle Flux) comme générateur principal, bien plus "
+            "réaliste et stable. Si son quota gratuit quotidien "
+            "venait à s'épuiser, ORIA passe automatiquement à "
+            "Pollinations.ai comme solution de secours pour que tu "
+            "puisses toujours générer une image."
         ),
         "chat_placeholder": "Demande à ORIA, ou joins une image/PDF...",
         "boton_escuchar": "Écouter",
@@ -1465,6 +1500,92 @@ def extraer_texto_pdf(archivo_subido):
         return None, str(e)
 
 
+# Modelo de Cloudflare Workers AI usado para imágenes: Flux (de Black
+# Forest Labs), con muy buen realismo para ser gratuito. Cloudflare
+# da 10.000 "neuronas" gratis al día sin tarjeta, suficientes para
+# bastantes imágenes diarias con este modelo.
+MODELO_CLOUDFLARE_IMAGEN = "@cf/black-forest-labs/flux-1-schnell"
+
+
+def obtener_credenciales_cloudflare():
+    """Credenciales gratuitas opcionales de Cloudflare Workers AI
+    (dash.cloudflare.com → AI → Workers AI), usadas para generar
+    imágenes bastante más realistas y estables que el generador
+    anónimo de Pollinations. Devuelve (account_id, api_token), o
+    (None, None) si todavía no se han configurado en Secrets."""
+
+    try:
+        account_id = str(st.secrets["CLOUDFLARE_ACCOUNT_ID"]).strip().strip('"')
+        api_token = str(st.secrets["CLOUDFLARE_API_TOKEN"]).strip().strip('"')
+
+        if account_id and api_token:
+            return account_id, api_token
+
+    except Exception:
+        pass
+
+    return None, None
+
+
+def generar_imagen_cloudflare(prompt_imagen):
+    """Genera una imagen con Cloudflare Workers AI (modelo Flux), que
+    da resultados bastante más realistas y estables que el generador
+    anónimo de Pollinations. Devuelve (bytes, error).
+
+    Si no hay cuenta de Cloudflare configurada en Secrets, devuelve
+    (None, None) -sin mensaje de error-, para que generar_imagen_ia
+    pueda pasar a Pollinations sin más, en vez de mostrar un error
+    por algo que ni siquiera se ha intentado configurar."""
+
+    account_id, api_token = obtener_credenciales_cloudflare()
+
+    if not account_id or not api_token:
+        return None, None
+
+    try:
+        url = (
+            "https://api.cloudflare.com/client/v4/accounts/"
+            f"{account_id}/ai/run/{MODELO_CLOUDFLARE_IMAGEN}"
+        )
+
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "prompt": prompt_imagen[:2000],
+            "steps": 8,
+        }
+
+        respuesta = requests.post(
+            url, headers=headers, json=payload, timeout=60
+        )
+
+        if respuesta.status_code != 200:
+            return None, (
+                f"Cloudflare ha devuelto el error {respuesta.status_code}."
+            )
+
+        datos = respuesta.json()
+
+        if datos.get("success") is False:
+            return None, str(datos.get("errors") or "Error desconocido de Cloudflare.")
+
+        imagen_b64 = (datos.get("result") or {}).get("image")
+
+        if not imagen_b64:
+            return None, "Cloudflare no ha devuelto ninguna imagen."
+
+        return base64.b64decode(imagen_b64), None
+
+    except requests.exceptions.Timeout:
+        return None, "Cloudflare ha tardado demasiado en generar la imagen."
+
+    except Exception as e:
+        return None, str(e)
+
+
 def obtener_pollinations_key():
     """API key gratuita opcional de Pollinations.ai (auth.pollinations.ai).
     Sin ella, las imágenes se generan igual, pero con la marca de agua
@@ -1557,6 +1678,30 @@ def mejorar_prompt_imagen(prompt_simple):
 
 
 def generar_imagen_ia(prompt_imagen, intentos=3):
+    """Genera una imagen a partir de un texto. Si hay una cuenta
+    gratuita de Cloudflare Workers AI configurada en Secrets
+    (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN), se prueba primero
+    porque da resultados bastante más realistas y estables (modelo
+    Flux). Si no está configurada, o si falla por lo que sea (se ha
+    agotado la cuota gratuita diaria, un error puntual...), se cae
+    automáticamente en Pollinations.ai (gratuito, sin cuenta, pero de
+    menor calidad), para que generar una imagen nunca deje de
+    funcionar del todo. Devuelve (bytes, error)."""
+
+    imagen_cloudflare, error_cloudflare = generar_imagen_cloudflare(prompt_imagen)
+
+    if imagen_cloudflare:
+        return imagen_cloudflare, None
+
+    # error_cloudflare es None cuando Cloudflare ni siquiera está
+    # configurado (caso normal si el usuario no ha añadido esas
+    # claves); si está configurado pero ha fallado, seguimos sin más
+    # con Pollinations como red de seguridad.
+
+    return _generar_imagen_pollinations(prompt_imagen, intentos=intentos)
+
+
+def _generar_imagen_pollinations(prompt_imagen, intentos=3):
     """Genera una imagen a partir de un texto usando Pollinations.ai
     (servicio gratuito). Si hay una POLLINATIONS_API_KEY configurada
     en Secrets, se usa para quitar la marca de agua y tener más
@@ -6253,7 +6398,10 @@ def _mostrar_ajustes():
 
         st.markdown("---")
 
-        st.caption(t("estado_calidad_imagen"))
+        if obtener_credenciales_cloudflare() != (None, None):
+            st.caption(t("estado_calidad_imagen_cloudflare"))
+        else:
+            st.caption(t("estado_calidad_imagen"))
 
 
 with st.sidebar:
