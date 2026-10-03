@@ -1563,8 +1563,13 @@ def generar_imagen_cloudflare(prompt_imagen):
         )
 
         if respuesta.status_code != 200:
+            try:
+                detalle = respuesta.json().get("errors") or respuesta.text
+            except Exception:
+                detalle = respuesta.text
             return None, (
-                f"Cloudflare ha devuelto el error {respuesta.status_code}."
+                f"Cloudflare ha devuelto el error {respuesta.status_code}: "
+                f"{str(detalle)[:300]}"
             )
 
         datos = respuesta.json()
@@ -1695,8 +1700,12 @@ def generar_imagen_ia(prompt_imagen, intentos=3):
 
     # error_cloudflare es None cuando Cloudflare ni siquiera está
     # configurado (caso normal si el usuario no ha añadido esas
-    # claves); si está configurado pero ha fallado, seguimos sin más
-    # con Pollinations como red de seguridad.
+    # claves); si está configurado pero ha fallado, lo dejamos escrito
+    # en el log de Streamlit (Manage app → logs) para poder saber el
+    # motivo exacto sin tener que adivinarlo, y seguimos sin más con
+    # Pollinations como red de seguridad.
+    if error_cloudflare:
+        print(f"[ORIA] Cloudflare ha fallado al generar la imagen: {error_cloudflare}")
 
     return _generar_imagen_pollinations(prompt_imagen, intentos=intentos)
 
