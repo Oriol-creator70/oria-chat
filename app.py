@@ -706,6 +706,11 @@ TEXTOS = {
             "solo puedo hacer una por mensaje, así que me centro en "
             "la primera:"
         ),
+        "aviso_cloudflare_fallo": (
+            "⚠️ Cloudflare está configurado pero ha fallado, así que "
+            "esta imagen se ha generado con Pollinations en su lugar. "
+            "Motivo: {detalle}"
+        ),
         "invitado": "Invitado",
     },
     "en": {
@@ -864,6 +869,11 @@ TEXTOS = {
             "Looks like you asked for more than one thing at once. "
             "I can only do one per message for now, so I'll focus "
             "on the first:"
+        ),
+        "aviso_cloudflare_fallo": (
+            "⚠️ Cloudflare is configured but it failed, so this "
+            "image was generated with Pollinations instead. "
+            "Reason: {detalle}"
         ),
         "invitado": "Guest",
     },
@@ -1026,6 +1036,11 @@ TEXTOS = {
             "Sembla que has demanat diverses coses alhora. De "
             "moment només puc fer-ne una per missatge, així que em "
             "centro en la primera:"
+        ),
+        "aviso_cloudflare_fallo": (
+            "⚠️ Cloudflare està configurat però ha fallat, així que "
+            "aquesta imatge s'ha generat amb Pollinations en el seu "
+            "lloc. Motiu: {detalle}"
         ),
         "invitado": "Convidat",
     },
@@ -1190,6 +1205,11 @@ TEXTOS = {
             "On dirait que tu as demandé plusieurs choses à la "
             "fois. Pour l'instant je ne peux en faire qu'une par "
             "message, donc je me concentre sur la première :"
+        ),
+        "aviso_cloudflare_fallo": (
+            "⚠️ Cloudflare est configuré mais a échoué, donc cette "
+            "image a été générée avec Pollinations à la place. "
+            "Raison : {detalle}"
         ),
         "invitado": "Invité",
     },
@@ -1691,23 +1711,26 @@ def generar_imagen_ia(prompt_imagen, intentos=3):
     agotado la cuota gratuita diaria, un error puntual...), se cae
     automáticamente en Pollinations.ai (gratuito, sin cuenta, pero de
     menor calidad), para que generar una imagen nunca deje de
-    funcionar del todo. Devuelve (bytes, error)."""
+    funcionar del todo.
+
+    Devuelve (bytes, error, detalle_cloudflare). 'detalle_cloudflare'
+    es None cuando Cloudflare ha generado la imagen con éxito o
+    cuando ni siquiera está configurado (caso normal); solo lleva
+    texto cuando SÍ está configurado pero ha fallado y se ha caído en
+    Pollinations, para poder mostrar el motivo exacto en la propia
+    conversación en vez de obligar a mirar los logs del servidor."""
 
     imagen_cloudflare, error_cloudflare = generar_imagen_cloudflare(prompt_imagen)
 
     if imagen_cloudflare:
-        return imagen_cloudflare, None
+        return imagen_cloudflare, None, None
 
-    # error_cloudflare es None cuando Cloudflare ni siquiera está
-    # configurado (caso normal si el usuario no ha añadido esas
-    # claves); si está configurado pero ha fallado, lo dejamos escrito
-    # en el log de Streamlit (Manage app → logs) para poder saber el
-    # motivo exacto sin tener que adivinarlo, y seguimos sin más con
-    # Pollinations como red de seguridad.
     if error_cloudflare:
         print(f"[ORIA] Cloudflare ha fallado al generar la imagen: {error_cloudflare}")
 
-    return _generar_imagen_pollinations(prompt_imagen, intentos=intentos)
+    imagen_bytes, error = _generar_imagen_pollinations(prompt_imagen, intentos=intentos)
+
+    return imagen_bytes, error, error_cloudflare
 
 
 def _generar_imagen_pollinations(prompt_imagen, intentos=3):
@@ -7039,7 +7062,22 @@ if entrada:
                 prompt_mejorado = mejorar_prompt_imagen(intencion["parametro"])
 
             with st.spinner(t("generando_imagen")):
-                imagen_bytes, error = generar_imagen_ia(prompt_mejorado)
+                imagen_bytes, error, detalle_cloudflare = generar_imagen_ia(
+                    prompt_mejorado
+                )
+
+            # Si Cloudflare estaba configurado pero ha fallado (y por
+            # eso se ha usado Pollinations como respaldo), lo dejamos
+            # visible aquí mismo con el motivo exacto, para no tener
+            # que ir a buscarlo en los logs del servidor.
+            if detalle_cloudflare:
+                st.caption(
+                    t(
+                        "aviso_cloudflare_fallo",
+                        idioma=st.session_state.idioma,
+                        detalle=detalle_cloudflare,
+                    )
+                )
 
             if error:
                 st.error(t("error_generar_imagen", error=error))
