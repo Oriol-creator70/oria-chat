@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 from docx import Document
 from docx.shared import Pt as _DOCX_PT, Inches as _DOCX_INCHES, RGBColor as _DOCX_COLOR
 from docx.enum.text import WD_ALIGN_PARAGRAPH as _DOCX_ALINEAR
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
@@ -628,6 +628,14 @@ TEXTOS = {
         "no_pude_generar_imagen": "No he podido generar la imagen: {error}",
         "leyendo_pdf": "Leyendo el PDF...",
         "no_pude_leer_pdf": "No he podido leer el PDF: {error}",
+        "leyendo_archivo": 'Leyendo el archivo...',
+        "no_pude_leer_archivo": 'No he podido leer el archivo: {error}',
+        "modo_oscuro": 'Modo oscuro',
+        "buscar_chats_placeholder": 'Buscar conversaciones...',
+        "renombrar_titulo": 'Renombrar conversación',
+        "renombrar_tooltip": 'Renombrar',
+        "renombrar_guardar": 'Guardar',
+        "sin_resultados_chats": 'Sin resultados.',
         "generando_contenido_presentacion": "Redactando el contenido de la presentación...",
         "creando_pptx": "Montando la presentación y buscando imágenes...",
         "creando_exportables": "Generando el PDF y la vista previa...",
@@ -795,6 +803,14 @@ TEXTOS = {
         "no_pude_generar_imagen": "I couldn't generate the image: {error}",
         "leyendo_pdf": "Reading the PDF...",
         "no_pude_leer_pdf": "I couldn't read the PDF: {error}",
+        "leyendo_archivo": 'Reading the file...',
+        "no_pude_leer_archivo": "I couldn't read the file: {error}",
+        "modo_oscuro": 'Dark mode',
+        "buscar_chats_placeholder": 'Search chats...',
+        "renombrar_titulo": 'Rename chat',
+        "renombrar_tooltip": 'Rename',
+        "renombrar_guardar": 'Save',
+        "sin_resultados_chats": 'No results.',
         "generando_contenido_presentacion": "Writing the presentation content...",
         "creando_pptx": "Putting the slides together and finding images...",
         "creando_exportables": "Generating the PDF and the preview...",
@@ -961,6 +977,14 @@ TEXTOS = {
         "no_pude_generar_imagen": "No he pogut generar la imatge: {error}",
         "leyendo_pdf": "Llegint el PDF...",
         "no_pude_leer_pdf": "No he pogut llegir el PDF: {error}",
+        "leyendo_archivo": "Llegint l'arxiu...",
+        "no_pude_leer_archivo": "No he pogut llegir l'arxiu: {error}",
+        "modo_oscuro": 'Mode fosc',
+        "buscar_chats_placeholder": 'Cerca converses...',
+        "renombrar_titulo": 'Reanomena la conversa',
+        "renombrar_tooltip": 'Reanomena',
+        "renombrar_guardar": 'Desa',
+        "sin_resultados_chats": 'Sense resultats.',
         "generando_contenido_presentacion": "Redactant el contingut de la presentació...",
         "creando_pptx": "Muntant la presentació i cercant imatges...",
         "creando_exportables": "Generant el PDF i la vista prèvia...",
@@ -1129,6 +1153,14 @@ TEXTOS = {
         "no_pude_generar_imagen": "Je n'ai pas pu générer l'image : {error}",
         "leyendo_pdf": "Lecture du PDF...",
         "no_pude_leer_pdf": "Je n'ai pas pu lire le PDF : {error}",
+        "leyendo_archivo": 'Lecture du fichier...',
+        "no_pude_leer_archivo": "Je n'ai pas pu lire le fichier : {error}",
+        "modo_oscuro": 'Mode sombre',
+        "buscar_chats_placeholder": 'Rechercher...',
+        "renombrar_titulo": 'Renommer la conversation',
+        "renombrar_tooltip": 'Renommer',
+        "renombrar_guardar": 'Enregistrer',
+        "sin_resultados_chats": 'Aucun résultat.',
         "generando_contenido_presentacion": "Rédaction du contenu de la présentation...",
         "creando_pptx": "Assemblage de la présentation et recherche d'images...",
         "creando_exportables": "Génération du PDF et de l'aperçu...",
@@ -1489,6 +1521,76 @@ def imagen_a_data_uri(archivo_subido):
     tipo_mime = archivo_subido.type or "image/png"
 
     return f"data:{tipo_mime};base64,{b64}"
+
+
+EXTENSIONES_OFICINA = ("docx", "xlsx", "csv", "txt")
+_MAX_CARACTERES_ARCHIVO = 12000
+
+
+def extension_archivo(archivo_subido):
+    """Extensión en minúsculas y sin punto del archivo subido."""
+    nombre = getattr(archivo_subido, "name", "") or ""
+    return nombre.rsplit(".", 1)[-1].lower() if "." in nombre else ""
+
+
+def extraer_texto_oficina(archivo_subido):
+    """Extrae el texto de un Word (.docx), Excel (.xlsx), CSV o TXT
+    subido, para poder preguntarle cosas al modelo sobre su contenido.
+    Las tablas se pasan como filas separadas por ' | '. Devuelve
+    (texto, error)."""
+
+    try:
+        extension = extension_archivo(archivo_subido)
+        datos = archivo_subido.getvalue()
+        texto = ""
+
+        if extension == "docx":
+            documento = Document(io.BytesIO(datos))
+            partes = [p.text for p in documento.paragraphs if p.text.strip()]
+            for tabla in documento.tables:
+                for fila in tabla.rows:
+                    partes.append(
+                        " | ".join(c.text.strip() for c in fila.cells)
+                    )
+            texto = "\n".join(partes)
+
+        elif extension == "xlsx":
+            libro = load_workbook(
+                io.BytesIO(datos), read_only=True, data_only=True
+            )
+            partes = []
+            for hoja in libro.worksheets:
+                partes.append(f"[Hoja: {hoja.title}]")
+                for fila in hoja.iter_rows(values_only=True):
+                    if any(c is not None for c in fila):
+                        partes.append(
+                            " | ".join("" if c is None else str(c) for c in fila)
+                        )
+                    if sum(len(p) for p in partes) > _MAX_CARACTERES_ARCHIVO:
+                        break
+            texto = "\n".join(partes)
+
+        else:  # csv / txt
+            try:
+                texto = datos.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                texto = datos.decode("latin-1", errors="replace")
+
+        texto = texto.strip()
+
+        if not texto:
+            return None, "El archivo parece estar vacío."
+
+        if len(texto) > _MAX_CARACTERES_ARCHIVO:
+            texto = (
+                texto[:_MAX_CARACTERES_ARCHIVO]
+                + "\n\n[...archivo truncado por longitud...]"
+            )
+
+        return texto, None
+
+    except Exception as e:
+        return None, str(e)
 
 
 def extraer_texto_pdf(archivo_subido):
@@ -5695,7 +5797,8 @@ protagonismo a la lista. */
 esté dentro de "lista_chats"): nos aseguramos de que la "✕" de borrar
 se vea siempre pequeña, discreta y centrada, sin afectar al botón de
 seleccionar la conversación que tiene al lado. */
-[class*="st-key-del_"] button {
+[class*="st-key-del_"] button,
+[class*="st-key-ren_"] button {
     padding: 0.3rem !important;
     min-height: 0 !important;
     color: #B5B5AF !important;
@@ -5704,7 +5807,8 @@ seleccionar la conversación que tiene al lado. */
     justify-content: center !important;
 }
 
-[class*="st-key-del_"] button:hover {
+[class*="st-key-del_"] button:hover,
+[class*="st-key-ren_"] button:hover {
     color: #C0392B !important;
     background-color: #F6E9E7 !important;
 }
@@ -5837,6 +5941,72 @@ st.markdown(
     css_code,
     unsafe_allow_html=True,
 )
+
+# Modo oscuro: Streamlit no deja cambiar su tema en caliente, así que
+# se superpone este CSS cuando el usuario lo activa en Ajustes. La
+# elección se guarda en la URL (?tema=oscuro), igual que el
+# identificador de invitado, para que sobreviva a recargar la página
+# en este dispositivo sin tocar la base de datos.
+if "tema" not in st.session_state:
+    st.session_state.tema = (
+        "oscuro" if st.query_params.get("tema") == "oscuro" else "claro"
+    )
+
+CSS_MODO_OSCURO = """
+<style>
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+header[data-testid="stHeader"] {
+    background-color: #17171A !important;
+    color: #ECECEA !important;
+}
+.stApp p, .stApp li, .stApp span, .stApp label, .stApp h1, .stApp h2,
+.stApp h3, .stApp h4, .stApp td, .stApp th,
+[data-testid="stMarkdownContainer"] {
+    color: #ECECEA;
+}
+.stApp [data-testid="stCaptionContainer"],
+.oria-tagline { color: #9A9AA3 !important; }
+.oria-brand-name { color: #ECECEA !important; }
+.oria-brand svg circle { stroke: #ECECEA; }
+.oria-brand svg circle[fill="#2B2B31"],
+[data-testid="stSidebar"] svg circle[fill="#2B2B31"] { fill: #ECECEA; }
+[data-testid="stSidebar"] svg circle[stroke="#2B2B31"] { stroke: #ECECEA; }
+.user-bubble { background-color: #2A2A30 !important; color: #ECECEA !important; }
+[data-testid="stSidebar"] {
+    background-color: #1E1E22 !important;
+    border-right: 1px solid #2E2E34 !important;
+}
+.stSidebar .stButton > button { color: #D8D8D4 !important; }
+.stSidebar .stButton > button:hover { background-color: #2A2A30 !important; color: #FFFFFF !important; }
+.stSidebar .stButton > button[kind="primary"] { background-color: #34343B !important; color: #FFFFFF !important; }
+.st-key-boton_nueva_conversacion .stButton > button {
+    background-color: #26262B !important; border: 1px solid #3A3A42 !important;
+}
+.st-key-fila_cuenta { border-top: 1px solid #2E2E34 !important; }
+[data-testid="stSidebarCollapsedControl"], [data-testid="collapsedControl"],
+#oria-boton-menu { background-color: #26262B !important; border-color: #3A3A42 !important; color: #ECECEA !important; }
+[data-testid="stChatInput"], [data-testid="stChatInput"] > div,
+[data-testid="stChatInput"] textarea {
+    background-color: #26262B !important; color: #ECECEA !important;
+}
+[data-testid="stBottom"], [data-testid="stBottom"] > div { background-color: #17171A !important; }
+.stApp [data-testid="stButton"] > button, .stApp .stDownloadButton > button {
+    background-color: #26262B; color: #ECECEA; border: 1px solid #3A3A42;
+}
+.stApp input, .stApp textarea, .stApp [data-baseweb="select"] > div {
+    background-color: #26262B !important; color: #ECECEA !important;
+}
+div[role="dialog"], [data-testid="stDialog"] > div { background-color: #1E1E22 !important; color: #ECECEA !important; }
+[data-testid="stExpander"] { border-color: #3A3A42 !important; }
+hr { border-color: #2E2E34 !important; }
+code, pre { background-color: #26262B !important; color: #ECECEA !important; }
+</style>
+"""
+
+if st.session_state.tema == "oscuro":
+    st.markdown(CSS_MODO_OSCURO, unsafe_allow_html=True)
 
 # Barra lateral propia para el móvil (no depende de ningún control
 # interno de Streamlit, que en algunas versiones no aparece o no se
@@ -6305,6 +6475,24 @@ def _cerrar_sesion():
             st.session_state.pop(_clave, None)
 
 
+@st.dialog(t("renombrar_titulo"))
+def _renombrar_chat(cid):
+    """Pide un nuevo título para la conversación y lo guarda."""
+    actual = st.session_state.chats.get(cid, {}).get("title", "")
+    nuevo = st.text_input(
+        t("renombrar_titulo"),
+        value=actual,
+        max_chars=60,
+        label_visibility="collapsed",
+    )
+    if st.button(t("renombrar_guardar"), use_container_width=True):
+        nuevo = nuevo.strip()
+        if nuevo and cid in st.session_state.chats:
+            st.session_state.chats[cid]["title"] = nuevo
+            guardar_todo()
+        st.rerun()
+
+
 @st.dialog("Ajustes")
 def _mostrar_ajustes():
     """Todo lo que no es 'chatear' vive aquí: memoria, estado de las
@@ -6345,6 +6533,19 @@ def _mostrar_ajustes():
             st.success(
                 t("idioma_cambiado", idioma=IDIOMAS_DISPONIBLES[nuevo_idioma])
             )
+            st.rerun()
+
+        st.markdown("---")
+
+        oscuro_actual = st.session_state.get("tema") == "oscuro"
+        oscuro_nuevo = st.toggle(t("modo_oscuro"), value=oscuro_actual)
+
+        if oscuro_nuevo != oscuro_actual:
+            st.session_state.tema = "oscuro" if oscuro_nuevo else "claro"
+            if oscuro_nuevo:
+                st.query_params["tema"] = "oscuro"
+            elif "tema" in st.query_params:
+                del st.query_params["tema"]
             st.rerun()
 
     # --------------------------------------------
@@ -6472,13 +6673,40 @@ with st.sidebar:
 
     chats_a_borrar = []
 
+    consulta_chats = ""
+    if st.session_state.chats:
+        consulta_chats = st.text_input(
+            t("buscar_chats_placeholder"),
+            key="buscar_chats",
+            placeholder=t("buscar_chats_placeholder"),
+            label_visibility="collapsed",
+        ).strip().lower()
+
+    def _chat_coincide(info):
+        if not consulta_chats:
+            return True
+        if consulta_chats in str(info.get("title", "")).lower():
+            return True
+        for m in info.get("messages", []):
+            contenido = m.get("content")
+            if isinstance(contenido, str) and consulta_chats in contenido.lower():
+                return True
+        return False
+
     with st.container(key="lista_chats"):
+
+        hay_resultados = False
 
         for cid, chat_info in reversed(
             list(st.session_state.chats.items())
         ):
 
-            col_btn, col_del = st.columns([0.85, 0.15])
+            if not _chat_coincide(chat_info):
+                continue
+
+            hay_resultados = True
+
+            col_btn, col_ren, col_del = st.columns([0.7, 0.15, 0.15])
 
             # Determinar botón seleccionado.
             if cid == st.session_state.current_chat_id:
@@ -6502,6 +6730,15 @@ with st.sidebar:
                     st.session_state.current_chat_id = cid
                     st.rerun()
 
+            with col_ren:
+
+                if st.button(
+                    "✎",
+                    key=f"ren_{cid}",
+                    help=t("renombrar_tooltip"),
+                ):
+                    _renombrar_chat(cid)
+
             with col_del:
 
                 if st.button(
@@ -6510,6 +6747,9 @@ with st.sidebar:
                     help=t("eliminar_conversacion_tooltip"),
                 ):
                     chats_a_borrar.append(cid)
+
+        if consulta_chats and not hay_resultados:
+            st.caption(t("sin_resultados_chats"))
 
     if chats_a_borrar:
 
@@ -6912,7 +7152,7 @@ for indice_mensaje, message in enumerate(mensajes_actuales):
 entrada = st.chat_input(
     t("chat_placeholder"),
     accept_file=True,
-    file_type=["png", "jpg", "jpeg", "pdf"],
+    file_type=["png", "jpg", "jpeg", "pdf", "docx", "xlsx", "csv", "txt"],
 )
 
 
@@ -7482,6 +7722,50 @@ if entrada:
                     f"'{archivo_adjunto.name}'. Este es el contenido "
                     f"extraído del documento:\n\n{texto_pdf}\n\n"
                     f"Petición del usuario sobre el documento: {pregunta}"
+                )
+
+                respuesta_texto = st.write_stream(
+                    obtener_respuesta_ia_stream(
+                        prompt_aumentado,
+                        historial_mensajes=None,
+                        memoria_texto=st.session_state.memoria,
+                        idioma=st.session_state.idioma,
+                    )
+                )
+
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": respuesta_texto,
+                }
+
+        # ----------------------------------------------------
+        # MODO: WORD / EXCEL / CSV / TXT ADJUNTO
+        # ----------------------------------------------------
+
+        elif (
+            archivo_adjunto
+            and extension_archivo(archivo_adjunto) in EXTENSIONES_OFICINA
+        ):
+
+            with st.spinner(t("leyendo_archivo")):
+                texto_archivo, error = extraer_texto_oficina(archivo_adjunto)
+
+            if error:
+                st.error(error)
+                respuesta_final = {
+                    "role": "assistant",
+                    "type": "text",
+                    "content": t("no_pude_leer_archivo", error=error),
+                }
+            else:
+                pregunta = user_text if user_text else t("resumen_pdf_defecto")
+
+                prompt_aumentado = (
+                    f"El usuario ha subido un archivo llamado "
+                    f"'{archivo_adjunto.name}'. Este es el contenido "
+                    f"extraído:\n\n{texto_archivo}\n\n"
+                    f"Petición del usuario sobre el archivo: {pregunta}"
                 )
 
                 respuesta_texto = st.write_stream(
